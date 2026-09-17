@@ -54,7 +54,17 @@ On the off chance all tasks cant fit before their due date, it'll be flagged for
 
 Then tasks are scheduled into the free time based on how long it'd take and the priority.
 
-The tasks are stored in a database to be retrieved for the computation. Only the priority value (i.e 1-5), its state, its estimated time to completion and due date (i.e urgency) are stored (For fixed/recurring tasks, their time slot are also stored). each time the calendar is viewed, the value is recomputed to be displayed. Reason this is fine, is because the values are deterministic, so same input will always give the same output, and the computation is fast enough to be near instant, this also makes it very easy to change.
+The tasks are stored in a database to be retrieved for the computation.
+
+What is stored:
+
+1. Importance value (i.e 1-5)
+2. Its state: to_do, in_progress, done
+3. Its estimated time to completion in mins
+4. Its due date time
+5. Its creation timestamp
+
+are stored (For fixed/recurring tasks, their time slot are also stored). each time the calendar is viewed, the value is recomputed to be displayed. Reason this is fine, is because the values are deterministic, so same input will always give the same output, and the computation is fast enough to be near instant, this also makes it very easy to change.
 
 Overdue tasks are removed from the pool, unlike done tasks, they are put in a pile, and reorder based on priority. formula goes:
 

@@ -1,3 +1,5 @@
+// Overdue task and Done tasks are filtered out before scheduling
+
 const importance = (importance_score: number) => {
   // how important a task is from 1 to 5. 1 is most important `;
   // Normalising the value:
@@ -8,7 +10,8 @@ const importance = (importance_score: number) => {
 
 const urgency = (
   estimated_time: number,
-  days_until_due: number,
+  due_date_time: Date,
+  now: Date,
   daily_capacity: number,
 ) => {
   // How urgent a task is based on:
@@ -16,15 +19,17 @@ const urgency = (
   // 2) How close it is to the due date
   // 3) How much time/availability a user has to do their tasks on a normal day
 
-  // If task is due, return 1
-  if (days_until_due == 0) return 1;
-
-  // If task is overdue, return 0
-  if (days_until_due < 0) return 2;
-
-  const pace_needed = estimated_time / Math.exp(days_until_due);
+  const days_until_due = (due_date_time.getTime() - now.getTime()) / 86400000;
+  const days_until_due_mins = days_until_due * 1440;
+  const pace_needed = estimated_time / Math.exp(days_until_due_mins);
   const daily_capacity_mins = daily_capacity * 60;
   return Math.min(1, pace_needed / daily_capacity_mins);
+};
+
+const overdue_urgency = (estimated_time: number, days_until_due: number) => {
+  // If task is overdue, return urgency based on how long it has been overdue for
+  // For overdue task ranking, not part of scheduling
+  return estimated_time / (1 / (Math.abs(days_until_due) + 1));
 };
 
 // decay = 1 / (1 + k * days_until_due)
@@ -45,18 +50,38 @@ const URGENCY_WEIGHT = 0.55;
 
 const priority = (
   importance_score: number,
-  urgency_score: number,
   state: "to_do" | "in_progress" | "done",
+  estimated_time: number,
+  due_date_time: Date,
+  now: Date,
+  daily_capacity: number,
 ) => {
   // A task has 3 states: to-do, in-progress and done.
   // Done: It's removed from the candidate pool. Filtered before scheduling.
   // In-progress: A value of 0.1 is added to its priority scoring.
   // To-do: No effect on the task
+  const importance_value = importance(importance_score);
+  const urgency_value = urgency(
+    estimated_time,
+    due_date_time,
+    now,
+    daily_capacity,
+  );
+
   if (STATE[state] === 1)
     return (
-      IMPORTANCE_WEIGHT * importance_score +
-      URGENCY_WEIGHT * urgency_score +
+      IMPORTANCE_WEIGHT * importance_value +
+      URGENCY_WEIGHT * urgency_value +
       0.3
     );
-  return IMPORTANCE_WEIGHT * importance_score + URGENCY_WEIGHT * urgency_score;
+  return IMPORTANCE_WEIGHT * importance_value + URGENCY_WEIGHT * urgency_value;
+};
+
+type TiedTasks = {
+  task_id: number;
+  created_at: Date;
+};
+
+const tie_breaker = (tasks: TiedTasks[]) => {
+  // if multiple tasks have the same priority, return the task that was created first
 };
