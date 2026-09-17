@@ -12,6 +12,8 @@ Looks back at recent history to inform how future weeks get arranged —
 picking up on patterns like which tasks/slots keep getting skipped or
 bumped.
 
+A scheduler that adapts to you, not the other way around.
+
 ## Core features
 
 - Set up weekly tasks, rank by priority, assign time slots so a task
