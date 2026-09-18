@@ -1,44 +1,59 @@
 // Overdue task and Done tasks are filtered out before scheduling
 
-const importance = (importance_score: number) => {
+const importance = (importanceScore: number) => {
   // how important a task is from 1 to 5. 1 is most important `;
   // Normalising the value:
   // total number of possible choices + 1, minus the chosen choice number, divided by the total number of choices.
   // i.e importance (normalisation) = (N + 1 − x) / N
-  return (6 - importance_score) / 5;
+  // The idea is a fixed, known maximum number of choices (N),
+  // scoring options based on rank (i.e 1 - 5),
+  // where a lower index (i.e 1) yields a higher score,
+  // whilst the lowest value (i.e 5) never yields absolute 0.
+  return (6 - importanceScore) / 5; // or (5 + 1 - importanceScore) / 5
 };
 
 const urgency = (
-  estimated_time: number,
-  due_date_time: Date,
+  estimatedTime: number, // in minutes
+  dueDateTime: Date,
   now: Date,
-  daily_capacity: number,
+  dailyCapacity: number, // in hours
 ) => {
   // How urgent a task is based on:
   // 1) How long it takes to complete the task
   // 2) How close it is to the due date
   // 3) How much time/availability a user has to do their tasks on a normal day
+  // It leans towards being pace-driven instead of deadline-proximity-driven
 
-  const days_until_due = (due_date_time.getTime() - now.getTime()) / 86400000;
-  const days_until_due_mins = days_until_due * 1440;
-  const pace_needed = estimated_time / Math.exp(days_until_due_mins);
-  const daily_capacity_mins = daily_capacity * 60;
-  return Math.min(1, pace_needed / daily_capacity_mins);
+  const daysUntilDue = (dueDateTime.getTime() - now.getTime()) / 86400000;
+  const daysUntilDueMins = daysUntilDue * 1440;
+
+  // Pace needed is how much time it takes to complete a task per day
+  // evenly split across remaining minutes till it's due from now.
+  const k = 0.0001; // steepness of the decay, how fast paceNeeded shrinks
+  const paceNeeded = estimatedTime / (1 + k * daysUntilDueMins);
+
+  // Daily capacity is how much time a user has to do their tasks on a normal day.
+  const dailyCapacityMins = dailyCapacity * 60;
+  const urgencyValue = paceNeeded / dailyCapacityMins;
+  const normalisedUrgency = urgencyValue / (1 + urgencyValue);
+  return normalisedUrgency; // return value greater than 0 and less than 1.
 };
 
-const overdue_urgency = (estimated_time: number, days_until_due: number) => {
+const overdueUrgency = (
+  estimatedTime: number,
+  dueDateTime: Date,
+  now: Date,
+) => {
   // If task is overdue, return urgency based on how long it has been overdue for
   // For overdue task ranking, not part of scheduling
-  return estimated_time / (1 / (Math.abs(days_until_due) + 1));
+  return (
+    estimatedTime / (1 / (Math.abs(dueDateTime.getTime() - now.getTime()) + 1))
+  );
 };
 
-// decay = 1 / (1 + k * days_until_due)
-// urgency_contribution = estimated_time * decay
-// urgency = min(1, urgency_contribution / daily_capacity_mins)
-
 const STATE = {
-  to_do: 0,
-  in_progress: 1,
+  todo: 0,
+  inProgress: 1,
   done: 2,
 };
 
@@ -49,39 +64,54 @@ const IMPORTANCE_WEIGHT = 0.45;
 const URGENCY_WEIGHT = 0.55;
 
 const priority = (
-  importance_score: number,
-  state: "to_do" | "in_progress" | "done",
-  estimated_time: number,
-  due_date_time: Date,
+  importanceScore: number,
+  state: "todo" | "inProgress" | "done",
+  estimatedTime: number,
+  dueDateTime: Date,
   now: Date,
-  daily_capacity: number,
+  dailyCapacity: number,
 ) => {
   // A task has 3 states: to-do, in-progress and done.
   // Done: It's removed from the candidate pool. Filtered before scheduling.
   // In-progress: A value of 0.1 is added to its priority scoring.
   // To-do: No effect on the task
-  const importance_value = importance(importance_score);
-  const urgency_value = urgency(
-    estimated_time,
-    due_date_time,
-    now,
-    daily_capacity,
-  );
+  const importanceValue = importance(importanceScore);
+  const urgencyValue = urgency(estimatedTime, dueDateTime, now, dailyCapacity);
 
   if (STATE[state] === 1)
     return (
-      IMPORTANCE_WEIGHT * importance_value +
-      URGENCY_WEIGHT * urgency_value +
-      0.3
+      IMPORTANCE_WEIGHT * importanceValue + URGENCY_WEIGHT * urgencyValue + 0.3
     );
-  return IMPORTANCE_WEIGHT * importance_value + URGENCY_WEIGHT * urgency_value;
+  return IMPORTANCE_WEIGHT * importanceValue + URGENCY_WEIGHT * urgencyValue;
+};
+
+const overduePriority = (
+  importanceScore: number,
+  state: "todo" | "inProgress" | "done",
+  estimatedTime: number,
+  dueDateTime: Date,
+  now: Date,
+) => {
+  const importanceValue = importance(importanceScore);
+  const urgencyValue = overdueUrgency(estimatedTime, dueDateTime, now);
+  if (STATE[state] === 1)
+    return (
+      IMPORTANCE_WEIGHT * importanceValue + URGENCY_WEIGHT * urgencyValue + 0.3
+    );
+  return IMPORTANCE_WEIGHT * importanceValue + URGENCY_WEIGHT * urgencyValue;
 };
 
 type TiedTasks = {
-  task_id: number;
-  created_at: Date;
+  taskId: number;
+  createdAt: Date;
 };
 
-const tie_breaker = (tasks: TiedTasks[]) => {
-  // if multiple tasks have the same priority, return the task that was created first
+const tieBreaker = (tasks: TiedTasks[]) => {
+  // if multiple tasks have the same priority,
+  // return a sorted list of tasks in order of created first
+  return tasks.sort((a, b) => {
+    if (a.createdAt > b.createdAt) return 1;
+    if (a.createdAt < b.createdAt) return -1;
+    return 0;
+  });
 };
