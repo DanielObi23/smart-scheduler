@@ -16,7 +16,7 @@
 
    The issue was if a task was due at 11:59pm, should it automatically be moved into overdue pile by 12:01? or should it be given a grace period buffer, let's say 30 minutes passed it due time, but the question is does the system treat the extra time as part of the due time? does the user see this extra time or what?
 
-   **My solution:** Originally I thought perhaps this grace period is to be for only tasks that are inProgress state, if a task is in done state, it's automatically removed and set aside as completed, and if a task is in todo state then it isnt given any grace period at all. But the issue now is, if a user then starts an overdue card right after it's overdue, and change the state to in_progress, the scheduler would have to readd it to the pile. Then we are back to the issue from earlier, which takes more priority, overdue or close to be due tasks? so my conclusion is same as before with better clarity, user should manually fit the slot, the reason is the point of the scheduler is to try and minimise the number of tasks that become overdue, its design is prevention not cure. I may have to revisit this later if i want this to also be used to act as a cure, as of now (v1), the algorithm is only given 1 objective. Also the user would most likely continue even if the scheduler marks the task they are doing as overdue, it doesnt forcibly stop them, and then when done, user can just mark the task as done in the overdue pile. The key point is this is simply a recommendation.
+   **My solution:** Originally I thought perhaps this grace period is to be for only tasks that are in_progress state, if a task is in done state, it's automatically removed and set aside as completed, and if a task is in todo state then it isnt given any grace period at all. But the issue now is, if a user then starts an overdue card right after it's overdue, and change the state to in_progress, the scheduler would have to readd it to the pile. Then we are back to the issue from earlier, which takes more priority, overdue or close to be due tasks? so my conclusion is same as before with better clarity, user should manually fit the slot, the reason is the point of the scheduler is to try and minimise the number of tasks that become overdue, its design is prevention not cure. I may have to revisit this later if i want this to also be used to act as a cure, as of now (v1), the algorithm is only given 1 objective. Also the user would most likely continue even if the scheduler marks the task they are doing as overdue, it doesnt forcibly stop them, and then when done, user can just mark the task as done in the overdue pile. The key point is this is simply a recommendation.
 
 4. How should task with same due date, importance and estimatedTime be ranked?
 
@@ -51,3 +51,7 @@
    x -> the remaining time till due in minutes.
 
    then: `paceNeeded = estimatedTime / y`.
+
+6. What should have more weight on overdue tasks ranking, how long since due or the estimated time to complete the task?
+
+   my solution: the goal this time is to try and minimise the number of overdue tasks, so the goal is to do the most tasks in the least possible time.
