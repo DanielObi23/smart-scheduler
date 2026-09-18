@@ -52,6 +52,14 @@
 
    then: `paceNeeded = estimatedTime / y`.
 
-6. What should have more weight on overdue tasks ranking, how long since due or the estimated time to complete the task?
+6. What should have more weight in overdue tasks urgency score, how long since it was due or the estimated time to complete the task?
 
-   my solution: the goal this time is to try and minimise the number of overdue tasks, so the goal is to do the most tasks in the least possible time.
+   If more weight is given to time-since-overdue (k), then the issue is more time could end up being spent on tasks far overdue and new tasks with short time could end up piling up.
+
+   If more weight is given to estimated-time (p), then the issue is more time may be given to newly overdue tasks and older tasks may never be reached if new overdue tasks with short estimated time keeps coming in.
+
+   so the question I asked myself, if the point of the scheduler as raised in issue 3 is that the scheduler job is to prevent as many tasks from going overdue, shouldnt the other side (i.e the overdue tasks) job be to focus on curing?
+
+   my solution: the goal this time is to try and minimise the number of overdue tasks, so the goal is to do the most tasks in the least possible time. Which means tasks with lower estimated time will be given a greater urgency relative to how long since overdue. This is similar to Shortest Processing Time (SPT) scheduling but defers as my logic also is influenced by the time since the task was overdue.
+
+   I did some more research and found out about Moore-Hodgson-style reasoning but where my logic defers (i.e in determining final priority scoring, not just urgency as above) is that unlike Moore-Hodgson-style reasoning, the task is influenced by their importance. This led me to believe my logic is backed, although others may disagree with my conclusion.
