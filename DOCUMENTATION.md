@@ -1,125 +1,118 @@
-# Optimum personal schedule recommender — design log & build plan
+# Scheduler — Priority Ranking System Documentation
 
-This is a best effort fit scheduler, not an exact fit.
-designed and implemented a priority-based greedy scheduling heuristic
+This documents the priority-ranking half of the scheduler (`lib/input.ts`) — how tasks are scored so they can be ordered before the scheduling/slotting phase (a separate, not-yet-built phase). For the full chronological reasoning trail behind every decision here, see `issues.md`.
 
-Tasks -> activities/time blocks ranked by importance (1-5) and urgency (i.e how close it is to the due date and how much time needed to complete the task) to get priority.
-based on which it's timeslotted into the calendar (i.e free time).
+## Design principles
 
-`pace needed = estimated minutes ÷ days until due`
-`urgency = min(1, pace needed ÷ daily capacity)`
+- **Pure functions, no hidden state.** Nothing in this file calls `Date.now()` internally — the current time (`now`) is always passed in as a parameter, exactly like `estimatedTime` or `dueDateTime`. This guarantees the same inputs always produce the same output, which is what makes it safe to recompute every task's priority on every calendar view instead of storing a stale precomputed value.
+- **Deterministic, not machine-learned.** This is a rule-based/mathematical scheduling algorithm (in the same family as classic scheduling heuristics like SPT and Moore-Hodgson), not an ML model — there is no training or learned behavior anywhere in this file.
+- **Best-effort, not exact.** True optimal task scheduling under real-world constraints is NP-hard; this system deliberately uses fast, well-reasoned heuristics rather than an exact solver.
 
-estimated time is select by user in the UI, default to 45 mins.
+## `importance(importanceScore)`
 
-importance is from a scale of 1 - 5, where 1 is highest importance and 5 is lowest importance.
+Converts a 1–5 importance rating (1 = most important) into a normalized `0–1` score:
 
-`importance (normalisation) = (N + 1 − x) / N`
-`importance (normalisation) = (6 - task's importance)/5 `
+```
+importance = (6 - importanceScore) / 5
+```
 
-Normalising the value: total number of possible choices + 1, minus the chosen choice number, divided by the total number of choices.
+Score 1 → `1.0` (most important). Score 5 → `0.2` (least important — deliberately never reaches exactly `0`, since even the lowest-importance task still has some weight).
 
-Daily capacity -> How much time a user has to do their tasks on a normal day. A value determined by user in hours.
+## `urgency(estimatedTime, dueDateTime, now, dailyCapacity)`
 
-Each task are given 3 states: to-do, in-progress and done.
+Computes urgency for **not-yet-due** tasks only. Overdue tasks never reach this function — see `overdueUrgency` below.
 
-Done: It's removed from the candidate pool.
-In-progress: A value of 0.1 is added to its priority scoring.
-To-do: No effect on the task
+```
+minsUntilDue = (dueDateTime - now) in minutes
+paceNeeded   = estimatedTime^p / (1 + k * minsUntilDue)
+urgencyValue = paceNeeded / (dailyCapacity_in_mins)^q
+urgency      = urgencyValue / (1 + urgencyValue)      // squashed to (0, 1)
+```
 
-`priority = w1·urgency + w2·importance`
+**Why pace-driven, not deadline-proximity-driven:** an earlier design used an inverted logistic sigmoid centered on a fixed "days until due" cliff (e.g., a sharp jump in urgency at the 3-day mark). This was rejected — because priority is recomputed on every calendar view (not computed once and cached), a hard cliff means the entire schedule could visibly reshuffle overnight, every time any task crossed that threshold. The current pace-based formula decays smoothly instead, so recomputation never produces a jarring jump.
 
-`Free time (per day) = 24 hours (full time in a day) - fixed time - buffer`
+**Parameters:**
+- **`k`** — decay rate. Controls how much urgency differs between two different due dates (e.g., 5 days vs. 30 days out). Chosen via testing against realistic due-date ranges rather than guessed.
+- **`p`** — currently `1`, meaning `estimatedTime` fully participates in the pace calculation (deliberately "fully pace-driven" — see the "Known bug and fix" section below for why this differs from `overdueUrgency`'s `p`).
+- **`q`** — dampens how strongly `dailyCapacity` shrinks the denominator (see below).
 
-Buffer -> _A random interruption eating into the day_ (e.g stopping for 30 minutes to talk to a friend, stuck in traffic) and _A task running long_ (e.g a coding problem taking 3 hours to complete instead of 2 hours, resolution is padding around estimated time, perhaps 15 to 30 minutes) and _Leisure_ (e.g gaming, hanging out with friends etc.)
+### Known bug and fix: urgency couldn't compete with importance
 
-The value of buffer will be affected based on the urgency of the tasks to be assigned for that day to a certain floor. i.e
+**The bug:** a task due in 1 hour with the *lowest* importance score could lose in final priority to a task due in 3 days with the *highest* importance score — purely because urgency's practical ceiling was mathematically far below `1`, while importance easily spans nearly its full `0.2–1.0` range.
 
-`proposed time = total available time - cap` (or going with a fraction)
+**Root cause, precisely:** `paceNeeded` can never exceed `estimatedTime` (the `1 + k*x` denominator is always `≥ 1`). Dividing that by the *entire* day's capacity (e.g., 480 minutes for an 8-hour day) means a single ordinary task's raw ratio is almost always small (`estimatedTime / dailyCapacityMins`), so even the best-case urgency (due immediately) rarely approaches the ceiling the squashing function is capable of reaching. This isn't a bug in the squashing function itself — it barely compresses small inputs at all; the smallness is baked in *before* squashing ever runs.
 
-`usable/extra time = proposed × (1 − urgency)`. This is equal to proposed time, if no task is due.
+**Approaches ruled out** (with numeric confirmation, not just reasoning):
+- **Reducing `IMPORTANCE_WEIGHT`** — worked only at extreme values (~2% weight), which effectively deletes importance as a factor rather than rebalancing it.
+- **Increasing `k`** — proven, not just observed, to never work: as `k → ∞`, every task's urgency collapses to `0`, so both tasks converge to their pure-importance floors — and the lower-importance task's floor is always below the higher-importance task's floor, regardless of `k`.
+- **Multiplying the final urgency value by a constant** — mathematically identical to increasing `URGENCY_WEIGHT`; the constant needed (~22x) pushes urgency values past `1` for nearly all tasks, breaking the `0–1` comparability the whole system depends on.
+- **Merging importance and urgency into one interacting equation** — technically capable of solving it, but sacrifices independent tuning of the two signals and risks overcorrecting into the opposite problem (urgency always dominating regardless of importance).
 
-`buffer = usable/extra time + cap`
+**The fix:** two changes combined (neither alone was sufficient):
+1. Increase `k` enough to create real separation between near-term and far-term raw urgency (previously, "due in 1 hour" and "due in 3 days" produced almost the same raw value).
+2. Dampen the daily-capacity term with an exponent `q < 1` (`dailyCapacityMins^q` instead of the raw value), raising urgency's achievable ceiling without removing capacity from the calculation entirely.
 
-Fixed time -> _One-off event_ (e.g visiting the dentist) and, _Recurring events_ (e.g specific study/exercise time on specific days, church specific time every sunday, work 9-5 monday to friday) and _Daily tasks_ (e.g eating, showering, cooking)
+Current values: `k = 0.05`, `q = 0.2`. Verified against: the original bug case (now correctly resolved), same-importance near-vs-far comparisons (nearer task still wins), and the deliberately-accepted "large far-out task can outrank a small near-term one" pace-driven behavior (still holds, matches the original design intent — see `urgency` design rationale above).
 
-With the time slots determined from fixed time, the remaining time (i.e free time) is then used to schedule based on how well the task fit the slot, either may be split or moved to another open slot during the day and a task that can fit into that slot is moved in there.
+## `overdueUrgency(estimatedTime, dueDateTime, now)`
 
-Follow this steps (from highest rank task):
+Ranks tasks that have **already** passed their due date. These tasks are removed from the automatic scheduling pool entirely (the scheduler's job is prevention, not cure) and shown in a separate manually-placed list, ranked by this function.
 
-1. Fit into the earliest fully accomodating free time slot before due date.
-2. If none exists, split into several slots, and the next highest priority follows step 1. This repeats until all slots are filled or all tasks are given a slot.
+```
+minsSinceOverdue = (now - dueDateTime) in minutes
+paceNeeded       = estimatedTime^p / (1 + k * minsSinceOverdue)
+urgencyValue     = 1 / paceNeeded
+overdueUrgency   = urgencyValue / (1 + urgencyValue)
+```
 
-scan backlog → shrink today's buffer → compute today's free time → place what fits → leftovers roll into tomorrow's backlog → repeat.
+**Design goal:** minimize the *number* of overdue tasks (a "cure" objective, complementing the main pool's "prevention" objective) — similar in spirit to Shortest Processing Time (SPT) scheduling, but differing from pure SPT by also weighing time-since-overdue (via `k`), so an old neglected task can't be buried indefinitely by a stream of smaller, newer overdue tasks. Also related to Moore-Hodgson-style reasoning (minimizing the count of late jobs), but differs there too — final priority for overdue tasks still factors in importance (via the shared `priority()` combination below), which neither SPT nor Moore-Hodgson considers.
 
-On the off chance all tasks cant fit before their due date, it'll be flagged for user to manually add it, then user can then put the slot when they want.
+**Parameters:**
+- **`k`** — controls the magnitude of difference between different amounts of time-since-overdue (e.g., 5 days vs. 30 days overdue).
+- **`p`** (currently `0.3`) — dampens how much `estimatedTime` affects urgency independently of `k`. Without dampening, urgency would be exactly inversely proportional to task size, letting a 5-minute task outrank a 1000-minute task by ~200x purely from size — `p < 1` compresses that swing while preserving the intended direction (shorter tasks still rank slightly more urgent, matching the "clear quick wins first" cure objective).
 
-Then tasks are scheduled into the free time based on how long it'd take and the priority.
+Verified via a starvation test: at the current constants, a 3-hour task overdue for 14+ days outranks even a constantly-refreshed 5-minute freshly-overdue task — confirming quick wins are favored short-term, without letting old tasks be buried indefinitely.
 
-The tasks are stored in a database to be retrieved for the computation.
+No `dailyCapacity` term here — overdue tasks aren't part of automatic scheduling, so there's no "does this fit in today's capacity" question to answer.
 
-What is stored:
+## `priority(...)`
 
-1. Importance value (i.e 1-5)
-2. Its state: to_do, in_progress, done
-3. Its estimated time to completion in mins
-4. Its due date time
-5. Its creation timestamp
+Combines importance and urgency (using the correct urgency function depending on whether the task is overdue) into one final score:
 
-are stored (For fixed/recurring tasks, their time slot are also stored). each time the calendar is viewed, the value is recomputed to be displayed. Reason this is fine, is because the values are deterministic, so same input will always give the same output, and the computation is fast enough to be near instant, this also makes it very easy to change.
+```
+priority = IMPORTANCE_WEIGHT * importance + URGENCY_WEIGHT * urgency
+         + IN_PROGRESS_WEIGHT   (only if overdue AND state === "in_progress")
+```
 
-Overdue tasks are removed from the pool, unlike done tasks, they are put in a pile, and reorder based on priority. formula goes:
+- **`IMPORTANCE_WEIGHT = 0.45`, `URGENCY_WEIGHT = 0.55`** — urgency weighted slightly higher, since getting tasks done on time matters, and people tend to over-rate importance.
+- **Overdue routing**: determined internally via `now > dueDateTime` — not passed in as a separate flag, so there's no risk of a caller's flag disagreeing with the actual dates.
+- **`in_progress` bonus (`IN_PROGRESS_WEIGHT = 0.05`) applies only to overdue tasks.** It was originally applied to all tasks, but since priority is recomputed on every view, a bonus that applies to the *auto-scheduled* pool would cause the calendar to visibly reshuffle the instant a user changes a task's state — the same class of instability problem that ruled out the deadline-proximity sigmoid. Restricting the bonus to the overdue pool (which is manually placed, not auto-slotted) avoids this: a ranking change there just reorders a suggestion list the user is already choosing from, rather than silently moving something already committed to the calendar.
+- **`done` tasks never reach this function** — they're filtered out of the candidate pool before scheduling entirely (assumed to happen upstream; not enforced inside this file).
 
-`urgency = (estimated time / (1 / (time since was due + 1)))`
+## `tieBreaker(tasks)`
 
-`priority = w1 * importance + w2 * urgency (if state == in_progress, + 0.3)`.
+When multiple tasks land on the exact same priority score, orders them by `createdAt` (oldest first) as a deterministic fallback. Sorts in place — acceptable here since it operates on a small, transient tied-subset with no other holder of that reference, not a long-lived shared array.
 
-daily_capacity isnt factored in as this is only for ranking
+## Data stored per task
 
-# AI aspect
+Only what's needed to recompute priority on demand:
+1. Importance value (1–5)
+2. State (`todo` / `in_progress` / `done`)
+3. Estimated time to completion (minutes)
+4. Due date + time (a single timestamp — not split into separate date and time fields)
+5. Creation timestamp (`createdAt`, used only for tie-breaking)
 
-There will be 2 aspects of LLM use, none of which would be for determining the optimum schedule.
+Nothing else is stored — priority is recomputed fresh every time the calendar is viewed, since it's cheap and fully deterministic.
 
-1. Inputing from text, the LLM job is to get all the required information, e.g
+## Explicitly out of scope for this phase
 
-User: I have a dental work on saturday,
-LLM: What time will this be?
-User: at 2pm to 4pm
-LLM then uses a tool to add this to the database.
+The following belong to the next phase (scheduling/slotting) and are **not** implemented here:
+- Free time / buffer computation
+- Fixed and recurring event modeling
+- The actual slot-fitting algorithm
+- The orchestrating function that ranks a full task list end-to-end (compute priority for every task, group ties, apply `tieBreaker`)
 
-2. Reading the scheduler to help user better schedule or know their schedule
+## Notable deferred decisions (see `issues.md` for full reasoning)
 
-User: I have a dental appointment on tuesday at 2pm.
-LLM: (LLM checks that slot is available or not) There's an issue, you have an work at that time, how would you like to schedule it? replace the work time or reschedule the dental appointment for a different day?
-User: I think wednesday at the same time.
-LLM: Great! That time slot is available, scheduling it in now.
-
-### Stretch goal: the adherence/reliability loop
-
-I am considering omitting this, as it gets significantly more complex if to factor in adherrence.
-
-Optional, second pass after the core algorithm works: track which time-of-day
-buckets tasks actually get completed vs. skipped (a rolling window, e.g. 14
-days), reduce that to a per-bucket reliability score, and fill free windows
-**most-reliable-bucket-first** instead of purely chronologically. This is the
-"the plan learns your actual patterns" feature — genuinely nice to demo, but
-correctly scoped as v2, not required to prove the core idea.
-
-- **Core is a pure, dependency-free package** — no I/O, no `Date.now()`
-  (accept "now" as a parameter, exactly like `compose.ts` does), no
-  randomness. Same inputs, same plan, every time. This is what makes it
-  trivially unit-testable and is worth calling out explicitly in the README
-  as a design decision, not an accident.
-
-## The UI
-
-3 interfaces:
-
-1. A kanban board: to-do, in-progress and done.
-2. The calendar
-3. LLM chat interface
-
-Interface for selecting estimated time for task completion during creation.
-
-## Mobile
-
-Mobile version would mean all data stored on device storage, no dependency means can run offline. Would need to go online for cloud sync across devices and LLM chat.
+- **No grace period for overdue tasks.** The scheduler's design is prevention, not cure (v1 scope) — a task crosses into "overdue" immediately at its due timestamp, with no buffer window. Revisiting this to also act as a "cure" mechanism is a possible future direction, though the overdue pool's SPT-style ranking already partially serves that purpose.
+- **Timezone handling for "due today" boundaries** is a known open edge case, not yet resolved.

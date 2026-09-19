@@ -63,3 +63,13 @@
    my solution: the goal this time is to try and minimise the number of overdue tasks, so the goal is to do the most tasks in the least possible time. Which means tasks with lower estimated time will be given a greater urgency relative to how long since overdue. This is similar to Shortest Processing Time (SPT) scheduling but defers as my logic also is influenced by the time since the task was overdue.
 
    I did some more research and found out about Moore-Hodgson-style reasoning but where my logic defers (i.e in determining final priority scoring, not just urgency as above) is that unlike Moore-Hodgson-style reasoning, the task is influenced by their importance. This led me to believe my logic is backed, although others may disagree with my conclusion.
+
+7. A bug with task priority caused by importance score:
+
+   I found a bug where a task due in 3 days with estimated time of 60 minutes and the highest importance value is given a higher priority score than a task due in 1 hour with an estimated time of 60 minutes and the lowest importance value.
+
+   So my first conclusion was to reduce the value of IMPORTANCE_WEIGHT, but that didnt fix the issue until it was close to 0.02, which is basically saying importance has no influence at all, which was wrong. I realised it's because the reduction affects both high and low importance equally and because the urgency cieling was significantly smaller compared to importance due daily capacity.
+
+   My second idea was merging importance equation into the urgency formula, but then i realised that means giving up independent tuning for the influence of the values importance and urgence. Also there's a risk of overcorrecting and resulting in the opposite problem.
+
+   My solution: Going back to my first idea, the idea is to raise the urgency cieling rather than try to bring down the importance value. After trying different approaches, like changing the value of k alone (The constant k determines how much importance is given to the differences between 2 due dates.), multiplying the final urgency value by a constant to raise urgency over importance etc. I found the best solution was simply dampening the value for daily capacity by a constant q, below 1, in order to raise the urgency cieling. But that was only one part of the solution, the importance in differences between 2 due dates was still low, so the constant k needed to be raised as well. I tested different values for this and found the value 0.2 worked best for q, as well as increasing the value of constant k, from 0.0001 to 0.05.

@@ -30,9 +30,9 @@ const urgency = (
   // Pace needed is how much time it takes to complete a task per day
   // evenly split across remaining minutes till it's due from now.
 
-  // The parameter k controls how of a difference two different due dates has, by what magnitude,
+  // The parameter k controls how much of a difference two different due dates has, by what magnitude,
   // i.e how much of a difference in value between 5 days till due vs 30 days till due.
-  const k = 0.0001;
+  const k = 0.05;
   // The parameter p controls how much weight estimated time has on urgency
   // relative to how long till due,
   // set to 1 to mean urgency is fully pace-driven.
@@ -40,7 +40,10 @@ const urgency = (
   const paceNeeded = estimatedTime ** p / (1 + k * minsUntilDue);
 
   // Daily capacity is how much time a user has to do their tasks on a normal day.
-  const dailyCapacityMins = dailyCapacity * 60;
+  // The constant q controls how much of an impact daily capacity has on urgency.
+  // value between 0 and 1.
+  const q = 0.2;
+  const dailyCapacityMins = (dailyCapacity * 60) ** q;
   const urgencyValue = paceNeeded / dailyCapacityMins;
   const normalisedUrgency = urgencyValue / (1 + urgencyValue);
   return normalisedUrgency; // return value greater than 0 and less than 1.
@@ -61,9 +64,10 @@ const overdueUrgency = (
 
   // The parameter k controls how of a difference two different due dates has, by what magnitude,
   // i.e how much of a difference in value between 5 days since due vs 30 days since due.
-  const k = 0.0001;
+  const k = 0.00025; // Roughly a week-long window where quick wins take priority over old tasks.
+
   // The parameter p controls how much weight estimated time has on urgency.
-  // The higher the value, the more weight it has
+  // The higher the value, the more weight it has, value between greater than 0 and 1
   const p = 0.3;
   const paceNeeded = estimatedTime ** p / (1 + k * minsSinceOverdue);
 
