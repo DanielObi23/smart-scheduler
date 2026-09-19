@@ -68,10 +68,20 @@ overdueUrgency   = urgencyValue / (1 + urgencyValue)
 **Design goal:** minimize the *number* of overdue tasks (a "cure" objective, complementing the main pool's "prevention" objective) — similar in spirit to Shortest Processing Time (SPT) scheduling, but differing from pure SPT by also weighing time-since-overdue (via `k`), so an old neglected task can't be buried indefinitely by a stream of smaller, newer overdue tasks. Also related to Moore-Hodgson-style reasoning (minimizing the count of late jobs), but differs there too — final priority for overdue tasks still factors in importance (via the shared `priority()` combination below), which neither SPT nor Moore-Hodgson considers.
 
 **Parameters:**
-- **`k`** — controls the magnitude of difference between different amounts of time-since-overdue (e.g., 5 days vs. 30 days overdue).
+- **`k`** (currently `0.00025`) — controls the magnitude of difference between different amounts of time-since-overdue (e.g., 5 days vs. 30 days overdue).
 - **`p`** (currently `0.3`) — dampens how much `estimatedTime` affects urgency independently of `k`. Without dampening, urgency would be exactly inversely proportional to task size, letting a 5-minute task outrank a 1000-minute task by ~200x purely from size — `p < 1` compresses that swing while preserving the intended direction (shorter tasks still rank slightly more urgent, matching the "clear quick wins first" cure objective).
 
-Verified via a starvation test: at the current constants, a 3-hour task overdue for 14+ days outranks even a constantly-refreshed 5-minute freshly-overdue task — confirming quick wins are favored short-term, without letting old tasks be buried indefinitely.
+Verified via a starvation test: at the current constants, a 3-hour task overdue for 7+ days outranks even a constantly-refreshed 5-minute freshly-overdue task — confirming quick wins are favored short-term, without letting old tasks be buried indefinitely.
+
+### Tuning `k`: a tradeoff between duration resolution and SPT-dominance, not a bug fix
+
+Unlike `urgency()`'s `k`/`q` fix above, this was a **calibration decision**, not a proven-bug fix — no incorrect ranking was ever found at any tested `k` value here.
+
+The original `k = 0.0001` gave poor separation between near-term overdue durations (`1hr=0.23`, `1day=0.25`, `3day=0.30` — barely distinguishable), which looked like the same weakness diagnosed in the main `urgency()` function. But raising `k` here behaves *oppositely* to the main function: instead of collapsing every task's urgency toward `0` (which was proven impossible to avoid there), raising `k` here pushes every duration toward `1` — a saturation failure mode, not a floor-collapse one. By `k=0.1`, durations from 1 hour to 30 days were all squeezed into `0.67`–`0.999`, nearly indistinguishable.
+
+More importantly, raising `k` directly conflicts with this function's core design goal (minimize the *number* of overdue tasks — see above): a higher `k` shrinks the window during which a small, quick task outranks an older, larger one (the "SPT-dominant window"). At `k=0.0001`, that window was 14 days; at `k=0.0005` or `0.001`, it shrunk to just 3 days — meaning age would override the "clear quick wins first" behavior nearly 5x sooner.
+
+**Chosen value: `k = 0.00025`** — a middle ground verified to give a reasonable spread across realistic durations (`1hr=0.23` up to `30day=0.78`) while preserving a still-substantial 7-day SPT-dominant window before age takes over.
 
 No `dailyCapacity` term here — overdue tasks aren't part of automatic scheduling, so there's no "does this fit in today's capacity" question to answer.
 
