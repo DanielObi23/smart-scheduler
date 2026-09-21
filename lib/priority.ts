@@ -40,6 +40,7 @@ const urgency = (
   const paceNeeded = estimatedTime ** p / (1 + k * minsUntilDue);
 
   // Daily capacity is how much time a user has to do their tasks on a normal day.
+  // It's assume to be greater than 0.
   // The constant q controls how much of an impact daily capacity has on urgency.
   // value between 0 and 1.
   const q = 0.2;

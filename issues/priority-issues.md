@@ -1,3 +1,7 @@
+## This is a log of issues faced during building the priority algorithm.
+
+**Side note:** I used claude mainly for finding and flagging flaws in my logic and for running tests with random but meaningful numbers, occasionally suggesting possible directions but never the solution. Every logic and solutions are my own, albeit some are from searching on google e.g normalisation formulas in issue 1, reading about others conclusions like the "minimizing the number of late jobs" problem in issue 2.
+
 1. **Comparing 2 derived values for determining priority:**
    Currently I have the result of both the importance, which is simply a range of 1-5, and the result for urgency calculation which gives wide ranges of value. I'm trying to compare the two values (importanceValue and urgencyValue) in a meaningful way, to calculate the value for priority.
 
