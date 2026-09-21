@@ -93,14 +93,22 @@ const URGENCY_WEIGHT = 0.55;
 // As it makes more sense to prioritise tasks that are already started.
 const IN_PROGRESS_WEIGHT = 0.05;
 
-const priority = (
-  importanceScore: number,
-  state: "todo" | "in_progress" | "done",
-  estimatedTime: number,
-  dueDateTime: Date,
-  now: Date,
-  dailyCapacity: number,
-) => {
+type Priority = {
+  importanceScore: number;
+  state: "todo" | "in_progress" | "done";
+  estimatedTime: number;
+  dueDateTime: Date;
+  now: Date;
+  dailyCapacity: number;
+};
+export const priority = ({
+  importanceScore,
+  state,
+  estimatedTime,
+  dueDateTime,
+  now,
+  dailyCapacity,
+}: Priority) => {
   // A task has 3 states: to-do, in-progress and done.
   // Done: It's removed from the candidate pool. Filtered before scheduling.
   // In-progress: A value is added for higher priority
