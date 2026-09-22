@@ -3,20 +3,13 @@ type TimeRange = {
   end: Date;
 };
 
-const freeTime = (
-  fixedTime: TimeRange[], // includes sleep time
-  buffer: number, // in hours
-  dailyCapacity: number, // in hours
-) => {
-  // Calculate the free time in a day in hours
-
+const uniqueTimeRange = (fixedTimeRange: TimeRange[]) => {
   // Dealing with "interval overlap" or "range intersection" problem
   // 1. Sort the ranges by start time in ascending order.
-  const sortedFixedTime = fixedTime.sort(
+  const sortedFixedTime = fixedTimeRange.sort(
     (a, b) => a.start.getTime() - b.start.getTime(),
   );
-
-  const uniqueTimeDifferences = sortedFixedTime.map(
+  const uniqueFixedTimeRanges = sortedFixedTime.map(
     (timeRange: TimeRange, index) => {
       const prevHigestEndTime = sortedFixedTime
         .slice(0, index)
@@ -27,39 +20,129 @@ const freeTime = (
           return currentValue;
         }, 0);
 
-      if (timeRange.start.getTime() > prevHigestEndTime) {
+      if (index === 0 || timeRange.start.getTime() > prevHigestEndTime) {
         // if start time is greater than previous highest end time in the list
-        // or the first range,
-        // get the difference, end time - start time,
-        // and add to list of time differences
-        return timeRange.end.getTime() - timeRange.start.getTime();
+        // or if it's the first range,
+        // return the range
+
+        return {
+          start: timeRange.start,
+          end: timeRange.end,
+        };
       } else if (timeRange.end.getTime() <= prevHigestEndTime) {
         // if current end time is less or equal to highest previous end time,
         // then pass/return early with no addition
-        return 0;
+        return null;
       } else {
-        // else subtract the previous highest end time from the current end time
+        // else return previous highest end time as the start time
+        // and current end time as end time
         // and add to list of time differences
-        return timeRange.end.getTime() - prevHigestEndTime;
+        return {
+          start: new Date(prevHigestEndTime),
+          end: timeRange.end,
+        };
       }
     },
   );
+  return uniqueFixedTimeRanges.filter((r) => r !== null);
+};
 
-  const unavailableTimeInMs = uniqueTimeDifferences.reduce(
-    (currentValue, duration) => {
-      return currentValue + duration;
-    },
-    0,
-  );
-  const unavailableHours = unavailableTimeInMs / 1000 / 60 / 60;
-  const hoursInADay = 24;
-  const freeTimeHours = hoursInADay - unavailableHours - buffer;
+const freeTimeRanges = (usedTimeRanges: TimeRange[]) => {
+  const date = new Date();
+  const startDay = date.setHours(0, 0, 0, 0);
+  const endDay = date.setHours(23, 59, 59, 999);
+  let freeTimeRanges = [];
 
-  if (freeTimeHours < 0) {
-    return 0;
+  if (usedTimeRanges.length === 0) {
+    return null;
+  }
+  for (let i = 0; i < usedTimeRanges.length; i++) {
+    const firstRange = i === 0;
+    const lastRange = i === usedTimeRanges.length - 1;
+
+    if (firstRange && lastRange) {
+      freeTimeRanges.push(
+        {
+          start: new Date(startDay),
+          end: usedTimeRanges[i].start,
+        },
+        {
+          start: usedTimeRanges[i].end,
+          end: new Date(endDay),
+        },
+      );
+      break;
+    }
+
+    if (firstRange) {
+      freeTimeRanges.push({
+        start: new Date(startDay),
+        end: usedTimeRanges[i].start,
+      });
+      continue;
+    }
+
+    const prevEndTime = usedTimeRanges[i - 1].end;
+    freeTimeRanges.push({
+      start: prevEndTime,
+      end: usedTimeRanges[i].start,
+    });
+
+    if (lastRange) {
+      freeTimeRanges.push({
+        start: usedTimeRanges[i].end,
+        end: new Date(endDay),
+      });
+    }
   }
 
-  return Math.min(dailyCapacity, freeTimeHours);
+  return freeTimeRanges;
+};
+
+const freeTime = (
+  fixedTime: TimeRange[], // includes sleep time
+  dailyCapacity: number, // in hours
+) => {
+  // Calculate free time ranges in a day
+
+  const usedTimeRanges: TimeRange[] = uniqueTimeRange(fixedTime);
+  const allFreeTimeRanges = freeTimeRanges(usedTimeRanges);
+
+  if (allFreeTimeRanges === null) {
+    // if no free time, return null
+    return null;
+  }
+  // Now need to do the bin packing problem with daily capacity
+  const sortedRanges = allFreeTimeRanges.sort((a, b) => {
+    const aRange = a.end.getTime() - a.start.getTime();
+    const bRange = b.end.getTime() - b.start.getTime();
+    if (aRange > bRange) {
+      return -1;
+    } else if (aRange < bRange) {
+      return 1;
+    } else {
+      return 0;
+    }
+  });
+
+  let dailyCapacityRanges = [];
+  let currentCapacity = 0;
+  let currentIndex = 0;
+
+  // TODO: handle capping the overflow.
+  while (
+    currentCapacity < dailyCapacity &&
+    currentIndex < sortedRanges.length
+  ) {
+    const range = sortedRanges[currentIndex];
+    dailyCapacityRanges.push(range);
+    const rangeCapacity =
+      (range.end.getTime() - range.start.getTime()) / 3600000;
+    currentCapacity += rangeCapacity;
+    currentIndex++;
+  }
+
+  return dailyCapacityRanges;
 };
 
 type Task = {

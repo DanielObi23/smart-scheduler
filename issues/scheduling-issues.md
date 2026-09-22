@@ -112,7 +112,9 @@
    // Any type 1 task left, to be flagged for user to manually add.
    // After adding, it becomes a type 2 task.
 
-   **Sub-problems:**
+---
+
+4. Deciding what factors should influence free time scheduling:
    I decided that free time is to be used to compute unique free time ranges rather than free hours in a day. That introduced 2 issues, how would daily capacity and buffer be handled?
    - Daily capacity is the max number of hours a user is available to tackle tasks in a normal day.
    - Buffer is the number of hours a user spends doing random tasks, like driving to work, catching up with a friend, cooking, relaxation.
@@ -133,3 +135,21 @@
    How about instead of First-Fit Decreasing, rather Best-Fit. So the task takes the minimum sized accommodating slot before its due date. Although this reduces waste, it's still possible for a 5 minute task to take a 1 hour slot if it's the minimum. As a solution to this, I thought how about fitting multiple tasks into one time range, which increases the complexity of keeping track of free time, but it solves the main issue.
 
    For buffer I decided to remove it as a factor as it added extra complexity to an already NP-hard problem. This is because daily capacity sort of accounts for it. Daily capacity is already the amount of time the user is comfortable spending on doing tasks on a normal day, so adding buffer's slight benefit isn't worth the added complexity.
+
+---
+
+5. Deciding if to take a strict or loose approach in deciding the time slots that should fit a user's daily capacity:
+
+   With the bin packing problem (Best-fit), the idea is most number of items with different sizes, sorted according to sizes, that can fit into a bin with minimum wastage. What I'm trying to decide is, should it be:
+
+   A. Strict: all the items must not be less than the bin space.
+   B. Loose: the items can overflow the bin, but only the last item is allowed to overflow.
+   C. Best-fit: After reaching the max in strict, go a step further by looking for smaller items that can fit in without the bin overflowing.
+
+   I decided to go with option B, because like I wrote in issue 4, I prefer a long uninterrupted task over numerous cuts, with A there's wastage and with C there's more fragmented time slots. So B is the best solution with a cap on the task overflow or truncating the final.
+
+   Another point of view is UX vs expectation:
+   UX -> fitting within user's defined constraint.
+   Expectation -> user would expect that occasionally tasks should overshoot their defined constraint for the day.
+
+   I decided to lean towards expectation, as this is a best-effort scheduler, not an exact-fit one, so it's already built on the premise that some imprecision is acceptable, and (this is my opinion) schedules should go a little over when necessary.
