@@ -146,10 +146,15 @@
    B. Loose: the items can overflow the bin, but only the last item is allowed to overflow.
    C. Best-fit: After reaching the max in strict, go a step further by looking for smaller items that can fit in without the bin overflowing.
 
-   I decided to go with option B, because like I wrote in issue 4, I prefer a long uninterrupted task over numerous cuts, with A there's wastage and with C there's more fragmented time slots. So B is the best solution with a cap on the task overflow or truncating the final.
+   I decided to go with option B, because like I wrote in issue 4, I prefer a long uninterrupted task over numerous cuts, with A there's wastage and with C there's more fragmented time slots. So B is the best solution with a cap on the task overflow or truncating the final range.
 
    Another point of view is UX vs expectation:
    UX -> fitting within user's defined constraint.
    Expectation -> user would expect that occasionally tasks should overshoot their defined constraint for the day.
 
    I decided to lean towards expectation, as this is a best-effort scheduler, not an exact-fit one, so it's already built on the premise that some imprecision is acceptable, and (this is my opinion) schedules should go a little over when necessary.
+
+   **sub problem:**
+   Whilst building this, claude pointed out a specific problem. What if the last time range that overflows is 5 hours? So my solution was a cap. This led to reasoning about different ways, originally thought of a fraction. But then:
+
+   **Final solution:** I thought it'd be best for it to be a percentage of the daily capacity, from 0-100. This actually worked best because now the user is the one who gets to decide if they want the fit to be strict (i.e choosing 0%) or loose (i.e a percentage higher than 0).

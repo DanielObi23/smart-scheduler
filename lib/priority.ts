@@ -55,6 +55,8 @@ const overdueUrgency = (
   dueDateTime: Date,
   now: Date,
 ) => {
+  // Shortest Processing Time (SPT) style ranking, with a fairness floor
+  // against starvation for older tasks. See priority-issues.md issue 6.
   // If task is overdue, return urgency based on how long it has been overdue for
   // For overdue task ranking, not part of scheduling
   const daysSinceOverdue = (now.getTime() - dueDateTime.getTime()) / 86_400_000;

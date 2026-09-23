@@ -4,6 +4,8 @@ type TimeRange = {
 };
 
 const uniqueTimeRange = (fixedTimeRange: TimeRange[]) => {
+  // Interval merging (classic overlap/merge-intervals problem).
+  // See scheduling-issues.md issue 1 for the reasoning trail.
   // Dealing with "interval overlap" or "range intersection" problem
   // 1. Sort the ranges by start time in ascending order.
   const sortedFixedTime = fixedTimeRange.sort(
@@ -48,6 +50,8 @@ const uniqueTimeRange = (fixedTimeRange: TimeRange[]) => {
 };
 
 const freeTimeRanges = (usedTimeRanges: TimeRange[]) => {
+  // Interval complement / gap-finding — the free-time counterpart to the
+  // merge in uniqueTimeRange above. See scheduling-issues.md issue 4.
   const date = new Date();
   const startDay = date.setHours(0, 0, 0, 0);
   const endDay = date.setHours(23, 59, 59, 999);
@@ -99,9 +103,10 @@ const freeTimeRanges = (usedTimeRanges: TimeRange[]) => {
   return freeTimeRanges;
 };
 
-const freeTime = (
+const allowedFreeTime = (
   fixedTime: TimeRange[], // includes sleep time
   dailyCapacity: number, // in hours
+  capacityOverflowPercent: number, // in percent, 0-100
 ) => {
   // Calculate free time ranges in a day
 
@@ -112,7 +117,8 @@ const freeTime = (
     // if no free time, return null
     return null;
   }
-  // Now need to do the bin packing problem with daily capacity
+  // Bin packing (First-Fit Decreasing, refined to Best-Fit, plus a
+  // percentage-based overflow cap). See scheduling-issues.md issues 4 and 5.
   const sortedRanges = allFreeTimeRanges.sort((a, b) => {
     const aRange = a.end.getTime() - a.start.getTime();
     const bRange = b.end.getTime() - b.start.getTime();
@@ -129,15 +135,38 @@ const freeTime = (
   let currentCapacity = 0;
   let currentIndex = 0;
 
-  // TODO: handle capping the overflow.
   while (
     currentCapacity < dailyCapacity &&
     currentIndex < sortedRanges.length
   ) {
     const range = sortedRanges[currentIndex];
-    dailyCapacityRanges.push(range);
+
     const rangeCapacity =
-      (range.end.getTime() - range.start.getTime()) / 3600000;
+      (range.end.getTime() - range.start.getTime()) / 3_600_000;
+
+    if (currentCapacity + rangeCapacity > dailyCapacity) {
+      // if adding the current range will overflow the daily capacity
+      // then truncate to fit within the allowed overflow
+
+      const allowedOverflow = (capacityOverflowPercent / 100) * dailyCapacity; // in hours
+      const overflow = currentCapacity + rangeCapacity - dailyCapacity; // in hours
+
+      if (overflow <= allowedOverflow) {
+        dailyCapacityRanges.push(range);
+      } else {
+        const disallowedOverflow = overflow - allowedOverflow;
+        const end = range.end.getTime() - disallowedOverflow * 3_600_000;
+        const newRange = (end - range.start.getTime()) / 3_600_000;
+        dailyCapacityRanges.push({
+          start: range.start,
+          end: new Date(end),
+        });
+        currentCapacity += newRange;
+        break;
+      }
+    } else {
+      dailyCapacityRanges.push(range);
+    }
     currentCapacity += rangeCapacity;
     currentIndex++;
   }
