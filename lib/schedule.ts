@@ -1,3 +1,5 @@
+import { priority } from "./priority";
+
 type TimeRange = {
   start: Date;
   end: Date;
@@ -114,12 +116,28 @@ const allowedFreeTime = (
   // Bin packing (First-Fit Decreasing, refined to Best-Fit, plus a
   // percentage-based overflow cap). See scheduling-issues.md issues 4 and 5.
 
+  if (fixedTime.length === 0) {
+    // daily capacity + overflow
+    const overflow = (capacityOverflowPercent / 100) * dailyCapacity;
+    // let it get a little more as it's a free day.
+    const fullCapacity = Math.ceil(dailyCapacity + overflow);
+    const date = new Date();
+    const start = new Date(date.setHours(0, 0, 0, 0));
+    const end = new Date(date.setHours(fullCapacity, 0, 0, 0));
+    return [
+      {
+        start,
+        end,
+      },
+    ];
+  }
+
   const usedTimeRanges: TimeRange[] = uniqueTimeRange(fixedTime);
   const allFreeTimeRanges = freeTimeRanges(usedTimeRanges);
 
   if (allFreeTimeRanges === null) {
     // if no free time, return null
-    return null;
+    return [];
   }
   const sortedRanges = allFreeTimeRanges.sort((a, b) => {
     const aRange = a.end.getTime() - a.start.getTime();
@@ -176,77 +194,140 @@ const allowedFreeTime = (
   return dailyCapacityRanges;
 };
 
-type Task = {
+type FixedTask = {
+  id: string;
+  start: Date;
+  end: Date;
+};
+
+type TaskState = "todo" | "in_progress" | "done";
+export type Task = {
   estimatedTime: number;
   importance: number;
   dueDateTime: Date;
+  state: TaskState;
+  createdAt: Date;
 };
 
-// Take a list of tasks, calculate their priority, and
-// then schedule them in free time for the day.
-
-// two types of tasks:
-// 1. to-do/to be scheduled
-// 2. ones scheduled by the user, i.e fixed time
-
-// -------------------
-
-// priority is called for type 1 tasks only
-
-// So for type 1 tasks, I need:
-// 1. estimated time
-// 2. importance
-// 3. due date and time
-// 4. state
-
-// And extras to calculate priority:
-// 1. daily capacity
-// 2. date and time now
-
-// -------------------
-
-// freetime is calculated from subtracting time given to type 2 tasks
-// per the day looked at
-
-// so for type 2 tasks, I need:
-// 1. start time
-// 2. end time
-
-// And extras to calculate free time:
-// 1. daily capacity
-// 2. buffer
-
-// -------------------
-
-// Type 1 task is to be scheduled within these free time, based on their priority.
-// Following these steps in a loop (from highest rank task):
-
-// 1. Fit into the earliest fully accommodating free time slot before due date.
-// 2. If none exists, split into several slots,
-// and the next highest priority follows step 1.
-// This repeats until all slots are filled or all tasks are given a slot.
-
-// The problem,
-// 1) how to keep track of these tasks that have been scheduled?
-// Considering a for loop that goes through them, after slotting in them, marks as scheduled
-// 2) how to determine the slots that are free, not just how many hours are free?
-// 3) how to keep track of used time slots and when all slots are filled?
-
-// Any type 1 task left, to be flagged for user to manually add.
-// After adding, it becomes a type 2 task.
-
-const schedule = (tasks: Task[]) => {
-  const fixedTime: TimeRange[] = [];
-  //const tas
-  return tasks;
+type Schedule = {
+  tasks: Task[];
+  fixedTask: FixedTask[];
+  dailyCapacity: number; // in hours
+  capacityOverflowPercent: number; // in percent, 0-100
+  dateTimeNow: Date;
 };
 
-// I think for daily capacity, it'll actually be the bin packing problem,
-// given different sizes (i.e ranges), fit within the available space (i.e daily capacity)
-// The idea is sort by sizes first (i.e First-fit decreasing)
-// and then try to fit into the container (i.e daily capacity).
-// The reason is a long none interrupted task is favoured more than a frequent interruption.
+const schedule = ({
+  tasks,
+  fixedTask,
+  dailyCapacity,
+  dateTimeNow,
+  capacityOverflowPercent,
+}: Schedule) => {
+  if (tasks.length === 0) {
+    return null;
+  }
+  // Sort the tasks by priority, and a tie breaker if multiple priority are equal
+  const withPriority = tasks.map((task) => ({
+    // Not computed within .sort() to avoid re-computing, resulting in better efficiency
+    task,
+    priority: priority({ task, now: dateTimeNow, dailyCapacity }),
+  }));
+  const prioritySortedTasks = withPriority.sort((a, b) => {
+    const priorityA = a.priority;
+    const priorityB = b.priority;
+    const createdAtA = a.task.createdAt;
+    const createdAtB = b.task.createdAt;
 
-// But comes an issue, tasks are ordered by priority, not estimated time (highest to lowest).
-// So a 5 minute task could end up taking a 1 hour slot.
-// leaving a 20 minute slot for a 3 hours task. This is a problem.
+    if (priorityA > priorityB) {
+      return -1;
+    } else if (priorityA < priorityB) {
+      return 1;
+    }
+    // First-come-first-served tiebreak for equal priority scores.
+    // See priority-issues.md issue 4.
+    // if multiple tasks have the same priority,
+    // return a sorted list of tasks in order of created first
+    else if (createdAtA > createdAtB) {
+      return 1;
+    } else if (createdAtA < createdAtB) {
+      return -1;
+    } else {
+      return 0;
+    }
+  });
+
+  // I need to arrange the fixed tasks into a record of day and array of same day tasks
+  // until the furthest due date, to bound recurring tasks
+  let furthestDueDate = new Date();
+  if (tasks.length === 1) {
+    furthestDueDate = tasks[0].dueDateTime;
+  } else {
+    const dueDateSortedTasks = [...tasks].sort((a, b) => {
+      const dueDateTimeA = a.dueDateTime;
+      const dueDateTimeB = b.dueDateTime;
+      if (dueDateTimeA > dueDateTimeB) {
+        return 1;
+      } else if (dueDateTimeA < dueDateTimeB) {
+        return -1;
+      } else {
+        return 0;
+      }
+    });
+    furthestDueDate = dueDateSortedTasks.at(-1)!.dueDateTime;
+  }
+
+  const date = new Date();
+  const todayStart = date.setHours(0, 0, 0, 0);
+  const millisecondsPerDay = 86_400_000;
+  // how many days from now is furthest due date
+  let maxDayCount = Math.ceil(
+    (furthestDueDate.getTime() - todayStart) / millisecondsPerDay,
+  );
+  let fixedTaskByDay: Record<number, FixedTask[]> = {};
+
+  for (let i = 0; i < fixedTask.length; i++) {
+    const taskDay = Math.floor(
+      (fixedTask[i].start.getTime() - todayStart) / 86_400_000,
+    ); // 0 is today, 1 is tomorrow, etc.
+
+    if (taskDay < 0 || taskDay > maxDayCount) {
+      continue;
+    }
+
+    if (!fixedTaskByDay[taskDay]) {
+      fixedTaskByDay[taskDay] = [];
+    }
+
+    fixedTaskByDay[taskDay].push(fixedTask[i]);
+  }
+
+  // then determine the free time for each of those days, and
+  // store these time ranges and date
+  const freeTimeRanges = [];
+
+  for (let i = 0; i <= maxDayCount; i++) {
+    // 0 is today, 1 is tomorrow, etc.
+    let dayTasks: FixedTask[] = [];
+    if (fixedTaskByDay[i]) {
+      dayTasks = fixedTaskByDay[i];
+    }
+
+    freeTimeRanges.push({
+      day: i,
+      freeTime: allowedFreeTime(
+        dayTasks,
+        dailyCapacity,
+        capacityOverflowPercent,
+      ),
+    });
+  }
+
+  // then schedule the to-do tasks in the minimum accommodating free time slots before due date
+
+  // if none exist, split into several slots. Aiming for minimal splits
+
+  // keep track of used time slots, and when all slots are filled, flag for users to manually add, by returning them
+
+  return;
+};

@@ -1,5 +1,7 @@
 // Overdue tasks and Done tasks are filtered out before scheduling.
 
+import { Task } from "./schedule";
+
 const importance = (importanceScore: number) => {
   // how important a task is from 1 to 5. 1 is most important `;
 
@@ -103,21 +105,11 @@ const URGENCY_WEIGHT = 0.55;
 const IN_PROGRESS_WEIGHT = 0.05;
 
 type Priority = {
-  importanceScore: number;
-  state: "todo" | "in_progress" | "done";
-  estimatedTime: number;
-  dueDateTime: Date;
+  task: Task;
   now: Date;
   dailyCapacity: number;
 };
-export const priority = ({
-  importanceScore,
-  state,
-  estimatedTime,
-  dueDateTime,
-  now,
-  dailyCapacity,
-}: Priority) => {
+export const priority = ({ task, now, dailyCapacity }: Priority) => {
   // Combines importance and urgency onto a shared 0-1 scale so they can be
   // fairly weighted. See priority-issues.md issues 1 and 7.
 
@@ -125,39 +117,26 @@ export const priority = ({
   // Done: It's removed from the candidate pool. Filtered before scheduling.
   // In-progress: A value is added for higher priority
   // To-do: No effect on the task
-  const importanceValue = importance(importanceScore);
+  const importanceValue = importance(task.importance);
   let urgencyValue = 0;
 
-  if (now > dueDateTime) {
+  if (now > task.dueDateTime) {
     // Overdue tasks that have been filtered out are then ordered based on their priority.
-    urgencyValue = overdueUrgency(estimatedTime, dueDateTime, now);
-    if (state === "in_progress")
+    urgencyValue = overdueUrgency(task.estimatedTime, task.dueDateTime, now);
+    if (task.state === "in_progress")
       return (
         IMPORTANCE_WEIGHT * importanceValue +
         URGENCY_WEIGHT * urgencyValue +
         IN_PROGRESS_WEIGHT
       );
   } else {
-    urgencyValue = urgency(estimatedTime, dueDateTime, now, dailyCapacity);
+    urgencyValue = urgency(
+      task.estimatedTime,
+      task.dueDateTime,
+      now,
+      dailyCapacity,
+    );
   }
 
   return IMPORTANCE_WEIGHT * importanceValue + URGENCY_WEIGHT * urgencyValue;
-};
-
-type TiedTasks = {
-  taskId: number;
-  createdAt: Date;
-};
-
-const tieBreaker = (tasks: TiedTasks[]) => {
-  // First-come-first-served tiebreak for equal priority scores.
-  // See priority-issues.md issue 4.
-
-  // if multiple tasks have the same priority,
-  // return a sorted list of tasks in order of created first
-  return tasks.sort((a, b) => {
-    if (a.createdAt > b.createdAt) return 1;
-    if (a.createdAt < b.createdAt) return -1;
-    return 0;
-  });
 };

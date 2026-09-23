@@ -64,7 +64,7 @@
 
    // two types of tasks:
    // 1. to-do/to be scheduled
-   // 2. ones scheduled by the user, i.e fixed time
+   // 2. ones scheduled by the user, i.e fixed task
 
    // -------------------
 
