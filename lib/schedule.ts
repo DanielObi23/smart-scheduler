@@ -52,6 +52,9 @@ const uniqueTimeRange = (fixedTimeRange: TimeRange[]) => {
 const freeTimeRanges = (usedTimeRanges: TimeRange[]) => {
   // Interval complement / gap-finding — the free-time counterpart to the
   // merge in uniqueTimeRange above. See scheduling-issues.md issue 4.
+
+  // Calculate free time ranges in a day
+
   const date = new Date();
   const startDay = date.setHours(0, 0, 0, 0);
   const endDay = date.setHours(23, 59, 59, 999);
@@ -108,7 +111,8 @@ const allowedFreeTime = (
   dailyCapacity: number, // in hours
   capacityOverflowPercent: number, // in percent, 0-100
 ) => {
-  // Calculate free time ranges in a day
+  // Bin packing (First-Fit Decreasing, refined to Best-Fit, plus a
+  // percentage-based overflow cap). See scheduling-issues.md issues 4 and 5.
 
   const usedTimeRanges: TimeRange[] = uniqueTimeRange(fixedTime);
   const allFreeTimeRanges = freeTimeRanges(usedTimeRanges);
@@ -117,8 +121,6 @@ const allowedFreeTime = (
     // if no free time, return null
     return null;
   }
-  // Bin packing (First-Fit Decreasing, refined to Best-Fit, plus a
-  // percentage-based overflow cap). See scheduling-issues.md issues 4 and 5.
   const sortedRanges = allFreeTimeRanges.sort((a, b) => {
     const aRange = a.end.getTime() - a.start.getTime();
     const bRange = b.end.getTime() - b.start.getTime();

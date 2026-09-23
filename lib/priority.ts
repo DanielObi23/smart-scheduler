@@ -2,6 +2,7 @@
 
 const importance = (importanceScore: number) => {
   // how important a task is from 1 to 5. 1 is most important `;
+
   // Normalising the value:
   // total number of possible choices + 1, minus the chosen choice number, divided by the total number of choices.
   // i.e importance (normalisation) = (N + 1 − x) / N
@@ -9,6 +10,7 @@ const importance = (importanceScore: number) => {
   // scoring options based on rank (i.e 1 - 5),
   // where a lower index (i.e 1) yields a higher score,
   // whilst the lowest value (i.e 5) never yields absolute 0.
+
   return (6 - importanceScore) / 5; // or (5 + 1 - importanceScore) / 5
 };
 
@@ -18,6 +20,9 @@ const urgency = (
   now: Date,
   dailyCapacity: number, // in hours
 ) => {
+  // Pace-driven urgency curve, and the ceiling fix for when it couldn't
+  // compete with importance. See priority-issues.md issues 5 and 7.
+
   // How urgent a task is based on:
   // 1) How long it takes to complete the task
   // 2) How close it is to the due date
@@ -43,6 +48,7 @@ const urgency = (
   // It's assume to be greater than 0.
   // The constant q controls how much of an impact daily capacity has on urgency.
   // value between 0 and 1.
+
   const q = 0.2;
   const dailyCapacityMins = (dailyCapacity * 60) ** q;
   const urgencyValue = paceNeeded / dailyCapacityMins;
@@ -57,6 +63,7 @@ const overdueUrgency = (
 ) => {
   // Shortest Processing Time (SPT) style ranking, with a fairness floor
   // against starvation for older tasks. See priority-issues.md issue 6.
+
   // If task is overdue, return urgency based on how long it has been overdue for
   // For overdue task ranking, not part of scheduling
   const daysSinceOverdue = (now.getTime() - dueDateTime.getTime()) / 86_400_000;
@@ -111,6 +118,9 @@ export const priority = ({
   now,
   dailyCapacity,
 }: Priority) => {
+  // Combines importance and urgency onto a shared 0-1 scale so they can be
+  // fairly weighted. See priority-issues.md issues 1 and 7.
+
   // A task has 3 states: to-do, in-progress and done.
   // Done: It's removed from the candidate pool. Filtered before scheduling.
   // In-progress: A value is added for higher priority
@@ -140,6 +150,9 @@ type TiedTasks = {
 };
 
 const tieBreaker = (tasks: TiedTasks[]) => {
+  // First-come-first-served tiebreak for equal priority scores.
+  // See priority-issues.md issue 4.
+
   // if multiple tasks have the same priority,
   // return a sorted list of tasks in order of created first
   return tasks.sort((a, b) => {
