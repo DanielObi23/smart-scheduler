@@ -202,6 +202,7 @@ type FixedTask = {
 
 type TaskState = "todo" | "in_progress" | "done";
 export type Task = {
+  id: string;
   estimatedTime: number;
   importance: number;
   dueDateTime: Date;
@@ -217,9 +218,27 @@ type Schedule = {
   dateTimeNow: Date;
 };
 
+type ScheduledRecord = {
+  taskId: string;
+  start: Date;
+  end: Date;
+};
+
+type FlattenedSlot = {
+  start: Date;
+  end: Date;
+  day: number;
+};
+
+const taskDay = (dueDayTime: number, today: number) => {
+  // both dueDayTime and today are in milliseconds
+  return Math.floor((dueDayTime - today) / 86_400_000);
+  // 0 is today, 1 is tomorrow, etc.
+};
+
 const schedule = ({
-  tasks,
-  fixedTask,
+  tasks, // tasks to be scheduled
+  fixedTask, // already scheduled tasks
   dailyCapacity,
   dateTimeNow,
   capacityOverflowPercent,
@@ -227,7 +246,7 @@ const schedule = ({
   if (tasks.length === 0) {
     return null;
   }
-  // Sort the tasks by priority, and a tie breaker if multiple priority are equal
+  // Sort the tasks to be scheduled by priority, and a tie breaker if multiple priority are equal
   const withPriority = tasks.map((task) => ({
     // Not computed within .sort() to avoid re-computing, resulting in better efficiency
     task,
@@ -287,24 +306,22 @@ const schedule = ({
   let fixedTaskByDay: Record<number, FixedTask[]> = {};
 
   for (let i = 0; i < fixedTask.length; i++) {
-    const taskDay = Math.floor(
-      (fixedTask[i].start.getTime() - todayStart) / 86_400_000,
-    ); // 0 is today, 1 is tomorrow, etc.
+    const currentTaskDay = taskDay(fixedTask[i].start.getTime(), todayStart); // 0 is today, 1 is tomorrow, etc.
 
-    if (taskDay < 0 || taskDay > maxDayCount) {
+    if (currentTaskDay < 0 || currentTaskDay > maxDayCount) {
       continue;
     }
 
-    if (!fixedTaskByDay[taskDay]) {
-      fixedTaskByDay[taskDay] = [];
+    if (!fixedTaskByDay[currentTaskDay]) {
+      fixedTaskByDay[currentTaskDay] = [];
     }
 
-    fixedTaskByDay[taskDay].push(fixedTask[i]);
+    fixedTaskByDay[currentTaskDay].push(fixedTask[i]);
   }
 
   // then determine the free time for each of those days, and
   // store these time ranges and date
-  const freeTimeRanges = [];
+  const freeTimeRanges: { day: number; freeTime: TimeRange[] }[] = [];
 
   for (let i = 0; i <= maxDayCount; i++) {
     // 0 is today, 1 is tomorrow, etc.
@@ -323,11 +340,75 @@ const schedule = ({
     });
   }
 
-  // then schedule the to-do tasks in the minimum accommodating free time slots before due date
+  const unscheduledTasks: Task[] = [];
+  const scheduledTasks: ScheduledRecord[] = [];
+  const flattenedSlots: FlattenedSlot[] = [];
+  // then schedule the to-do tasks in the minimum accommodating free time slots before due
 
-  // if none exist, split into several slots. Aiming for minimal splits
+  // 1. flatten the free time ranges into a single array of object {start, end, day}
 
-  // keep track of used time slots, and when all slots are filled, flag for users to manually add, by returning them
+  freeTimeRanges.forEach((day) => {
+    day.freeTime.forEach((freeTime) => {
+      flattenedSlots.push({
+        start: freeTime.start,
+        end: freeTime.end,
+        day: day.day,
+      });
+    });
+  });
+
+  // 2. filter out slots that are past due day and time
+  // 3. sort by range
+  prioritySortedTasks.forEach(({ task }) => {
+    const dueDay = taskDay(task.dueDateTime.getTime(), todayStart);
+    const selectableSlots = flattenedSlots
+      .filter((slot) => {
+        if (slot.day < dueDay) {
+          return true;
+        } else if (slot.day === dueDay) {
+          if (slot.end.getTime() <= task.dueDateTime.getTime()) {
+            return true;
+          }
+        }
+        return false;
+      })
+      .sort((a, b) => {
+        const slotA = a.end.getTime() - a.start.getTime();
+        const slotB = b.end.getTime() - b.start.getTime();
+        if (slotA < slotB) {
+          return -1;
+        } else if (slotA > slotB) {
+          return 1;
+        } else {
+          return 0;
+        }
+      });
+
+    if (selectableSlots.length === 0) {
+      unscheduledTasks.push(task);
+      return;
+    }
+
+    const estimatedTimeMs = task.estimatedTime * 60000;
+    const selectedSlot: FlattenedSlot | undefined = selectableSlots.find(
+      (slot) => estimatedTimeMs <= slot.end.getTime() - slot.start.getTime(),
+    );
+
+    // TODO: implement task slot splitting
+    if (!selectedSlot) {
+      unscheduledTasks.push(task);
+    } else {
+      const end = new Date(selectedSlot.start.getTime() + estimatedTimeMs);
+      scheduledTasks.push({
+        taskId: task.id,
+        start: selectedSlot.start,
+        end,
+      });
+    }
+  });
+
+  //TODO: keep track of used time slots, and when all slots are filled,
+  //TODO: return tasks unscheduled and flag them
 
   return;
 };
