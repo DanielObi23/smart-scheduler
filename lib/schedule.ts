@@ -51,15 +51,14 @@ const uniqueTimeRange = (fixedTimeRange: TimeRange[]) => {
   return uniqueFixedTimeRanges.filter((r) => r !== null);
 };
 
-const freeTimeRanges = (usedTimeRanges: TimeRange[]) => {
+const freeTimeRanges = (usedTimeRanges: TimeRange[], now: Date) => {
   // Interval complement / gap-finding — the free-time counterpart to the
   // merge in uniqueTimeRange above. See scheduling-issues.md issue 4.
 
   // Calculate free time ranges in a day
 
-  const date = new Date();
-  const startDay = date.setHours(0, 0, 0, 0);
-  const endDay = date.setHours(23, 59, 59, 999);
+  const startDay = now.setHours(0, 0, 0, 0);
+  const endDay = now.setHours(23, 59, 59, 999);
   let freeTimeRanges = [];
 
   if (usedTimeRanges.length === 0) {
@@ -108,11 +107,19 @@ const freeTimeRanges = (usedTimeRanges: TimeRange[]) => {
   return freeTimeRanges;
 };
 
-const allowedFreeTime = (
-  fixedTime: TimeRange[], // includes sleep time
-  dailyCapacity: number, // in hours
-  capacityOverflowPercent: number, // in percent, 0-100
-) => {
+interface AllowedFreeTime {
+  fixedTime: TimeRange[]; // includes sleep time
+  dailyCapacity: number; // in hours
+  capacityOverflowPercent: number; // in percent, 0-100,
+  now: Date;
+}
+
+const allowedFreeTime = ({
+  fixedTime, // includes sleep time
+  dailyCapacity, // in hours
+  capacityOverflowPercent, // in percent, 0-100,
+  now,
+}: AllowedFreeTime) => {
   // Bin packing (First-Fit Decreasing, refined to Best-Fit, plus a
   // percentage-based overflow cap). See scheduling-issues.md issues 4 and 5.
 
@@ -121,9 +128,8 @@ const allowedFreeTime = (
     const overflow = (capacityOverflowPercent / 100) * dailyCapacity;
     // let it get a little more as it's a free day.
     const fullCapacity = Math.ceil(dailyCapacity + overflow);
-    const date = new Date();
-    const start = new Date(date.setHours(0, 0, 0, 0));
-    const end = new Date(date.setHours(fullCapacity, 0, 0, 0));
+    const start = new Date(now.setHours(0, 0, 0, 0));
+    const end = new Date(now.setHours(fullCapacity, 0, 0, 0));
     return [
       {
         start,
@@ -133,7 +139,7 @@ const allowedFreeTime = (
   }
 
   const usedTimeRanges: TimeRange[] = uniqueTimeRange(fixedTime);
-  const allFreeTimeRanges = freeTimeRanges(usedTimeRanges);
+  const allFreeTimeRanges = freeTimeRanges(usedTimeRanges, now);
 
   if (allFreeTimeRanges === null) {
     // if no free time, return null
@@ -216,6 +222,7 @@ type Schedule = {
   dailyCapacity: number; // in hours
   capacityOverflowPercent: number; // in percent, 0-100
   dateTimeNow: Date;
+  now: Date;
 };
 
 type ScheduledRecord = {
@@ -242,6 +249,7 @@ const schedule = ({
   dailyCapacity,
   dateTimeNow,
   capacityOverflowPercent,
+  now,
 }: Schedule) => {
   if (tasks.length === 0) {
     return null;
@@ -278,7 +286,7 @@ const schedule = ({
 
   // I need to arrange the fixed tasks into a record of day and array of same day tasks
   // until the furthest due date, to bound recurring tasks
-  let furthestDueDate = new Date();
+  let furthestDueDate: Date;
   if (tasks.length === 1) {
     furthestDueDate = tasks[0].dueDateTime;
   } else {
@@ -296,8 +304,7 @@ const schedule = ({
     furthestDueDate = dueDateSortedTasks.at(-1)!.dueDateTime;
   }
 
-  const date = new Date();
-  const todayStart = date.setHours(0, 0, 0, 0);
+  const todayStart = now.setHours(0, 0, 0, 0);
   const millisecondsPerDay = 86_400_000;
   // how many days from now is furthest due date
   let maxDayCount = Math.ceil(
@@ -305,6 +312,7 @@ const schedule = ({
   );
   let fixedTaskByDay: Record<number, FixedTask[]> = {};
 
+  // sort fixedtasks by day
   for (let i = 0; i < fixedTask.length; i++) {
     const currentTaskDay = taskDay(fixedTask[i].start.getTime(), todayStart); // 0 is today, 1 is tomorrow, etc.
 
@@ -330,13 +338,16 @@ const schedule = ({
       dayTasks = fixedTaskByDay[i];
     }
 
+    const newDay = new Date(todayStart + i * millisecondsPerDay);
+
     freeTimeRanges.push({
       day: i,
-      freeTime: allowedFreeTime(
-        dayTasks,
+      freeTime: allowedFreeTime({
+        fixedTime: dayTasks,
         dailyCapacity,
         capacityOverflowPercent,
-      ),
+        now: newDay,
+      }),
     });
   }
 
@@ -359,6 +370,8 @@ const schedule = ({
 
   // 2. filter out slots that are past due day and time
   // 3. sort by range
+  const minLeftOverMins = 15 * 60 * 1000; // 15 minutes
+  const inBetweenTasksMins = 10 * 60 * 1000; // 10 minutes
   prioritySortedTasks.forEach(({ task }) => {
     const dueDay = taskDay(task.dueDateTime.getTime(), todayStart);
     const selectableSlots = flattenedSlots
@@ -394,21 +407,100 @@ const schedule = ({
       (slot) => estimatedTimeMs <= slot.end.getTime() - slot.start.getTime(),
     );
 
-    // TODO: implement task slot splitting
-    if (!selectedSlot) {
-      unscheduledTasks.push(task);
-    } else {
-      const end = new Date(selectedSlot.start.getTime() + estimatedTimeMs);
+    if (selectedSlot) {
+      const end = selectedSlot.start.getTime() + estimatedTimeMs;
       scheduledTasks.push({
         taskId: task.id,
         start: selectedSlot.start,
-        end,
+        end: new Date(end),
       });
+
+      // keep track of used time slots, and when all slots are filled,
+      const remainder = Math.floor(selectedSlot.end.getTime() - end);
+      const FlattenedSlotIndex = flattenedSlots.indexOf(selectedSlot);
+      // If remainder is less than 15 mins, slot is used up
+      if (remainder - inBetweenTasksMins <= minLeftOverMins) {
+        flattenedSlots.splice(FlattenedSlotIndex, 1);
+      } else {
+        flattenedSlots[FlattenedSlotIndex].start = new Date(
+          end + inBetweenTasksMins,
+        );
+      }
+    }
+
+    // implement task slot splitting if doesnt fit any slot
+    if (!selectedSlot) {
+      let estimatedTimeUnused = estimatedTimeMs;
+      let consumedSlots: FlattenedSlot[] = [];
+      let finalSlotUsedTime = 0;
+
+      // Pushing to consumedSlots instead of scheduled directly
+      // because we want to split the task into multiple slots
+      // and we need to verify if there's enough space to split the task
+
+      for (
+        let i = selectableSlots.length - 1;
+        estimatedTimeUnused > 0 && i >= 0;
+        i--
+      ) {
+        const slot = selectableSlots[i];
+        const slotTime = slot.end.getTime() - slot.start.getTime();
+        if (estimatedTimeUnused <= slotTime) {
+          consumedSlots.push(slot);
+          finalSlotUsedTime = estimatedTimeUnused;
+          estimatedTimeUnused = 0;
+        } else {
+          consumedSlots.push(slot);
+          estimatedTimeUnused -= slotTime;
+        }
+      }
+
+      if (estimatedTimeUnused > 0) {
+        unscheduledTasks.push(task);
+      } else {
+        const slotWithId: ScheduledRecord[] = [];
+        // keep track of used time slots, and when all slots are filled,
+        consumedSlots.forEach((slot, index) => {
+          if (index === consumedSlots.length - 1) {
+            const end = slot.start.getTime() + finalSlotUsedTime;
+            const remainder = Math.floor(slot.end.getTime() - end);
+            const FlattenedSlotIndex = flattenedSlots.indexOf(slot);
+            // If remainder is less than 15 mins, slot is used up
+            if (remainder - inBetweenTasksMins <= minLeftOverMins) {
+              slotWithId.push({
+                taskId: task.id,
+                start: slot.start,
+                end: new Date(end),
+              });
+              flattenedSlots.splice(FlattenedSlotIndex, 1);
+            } else {
+              const end = slot.start.getTime() + finalSlotUsedTime;
+              slotWithId.push({
+                taskId: task.id,
+                start: slot.start,
+                end: new Date(end),
+              });
+              flattenedSlots[FlattenedSlotIndex].start = new Date(
+                end + inBetweenTasksMins,
+              ); // update start time to end;
+            }
+          } else {
+            slotWithId.push({
+              taskId: task.id,
+              start: slot.start,
+              end: slot.end,
+            });
+            const FlattenedSlotIndex = flattenedSlots.indexOf(slot);
+            flattenedSlots.splice(FlattenedSlotIndex, 1);
+          }
+        });
+        scheduledTasks.push(...slotWithId);
+      }
     }
   });
 
-  //TODO: keep track of used time slots, and when all slots are filled,
-  //TODO: return tasks unscheduled and flag them
-
-  return;
+  return {
+    unscheduledTasks,
+    scheduledTasks,
+  };
 };
