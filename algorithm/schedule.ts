@@ -10,7 +10,7 @@ const uniqueTimeRange = (fixedTimeRange: TimeRange[]) => {
   // See scheduling-issues.md issue 1 for the reasoning trail.
   // Dealing with "interval overlap" or "range intersection" problem
   // 1. Sort the ranges by start time in ascending order.
-  const sortedFixedTime = fixedTimeRange.sort(
+  const sortedFixedTime = [...fixedTimeRange].sort(
     (a, b) => a.start.getTime() - b.start.getTime(),
   );
   const uniqueFixedTimeRanges = sortedFixedTime.map(
@@ -243,7 +243,7 @@ const taskDay = (dueDayTime: number, today: number) => {
   // 0 is today, 1 is tomorrow, etc.
 };
 
-const schedule = ({
+export const schedule = ({
   tasks, // tasks to be scheduled
   fixedTask, // already scheduled tasks
   dailyCapacity,
@@ -338,7 +338,10 @@ const schedule = ({
       dayTasks = fixedTaskByDay[i];
     }
 
-    const newDay = new Date(todayStart + i * millisecondsPerDay);
+    // Getting start of the day
+    // (This fixes issue with DST and other time zones mismatch)
+    const date = new Date(now);
+    const newDay = new Date(date.setDate(date.getDate() + i));
 
     freeTimeRanges.push({
       day: i,

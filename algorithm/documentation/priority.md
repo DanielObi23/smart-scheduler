@@ -1,6 +1,6 @@
-# Scheduler — Priority Ranking System Documentation
+# Scheduler — Priority Ranking System
 
-This documents the priority-ranking half of the scheduler (`lib/input.ts`) — how tasks are scored so they can be ordered before the scheduling/slotting phase (a separate, not-yet-built phase). For the full chronological reasoning trail behind every decision here, see `issues.md`.
+This documents the priority-ranking half of the scheduler (`algorithm/priority.ts`) — how tasks are scored so they can be ordered before the scheduling/slotting phase (documented separately in `scheduling.md`). For the full chronological reasoning trail behind every decision here, see `../issues/priority-issues.md`.
 
 ## Design principles
 
@@ -85,7 +85,7 @@ More importantly, raising `k` directly conflicts with this function's core desig
 
 No `dailyCapacity` term here — overdue tasks aren't part of automatic scheduling, so there's no "does this fit in today's capacity" question to answer.
 
-## `priority(...)`
+## `priority({ task, now, dailyCapacity })`
 
 Combines importance and urgency (using the correct urgency function depending on whether the task is overdue) into one final score:
 
@@ -99,9 +99,9 @@ priority = IMPORTANCE_WEIGHT * importance + URGENCY_WEIGHT * urgency
 - **`in_progress` bonus (`IN_PROGRESS_WEIGHT = 0.05`) applies only to overdue tasks.** It was originally applied to all tasks, but since priority is recomputed on every view, a bonus that applies to the *auto-scheduled* pool would cause the calendar to visibly reshuffle the instant a user changes a task's state — the same class of instability problem that ruled out the deadline-proximity sigmoid. Restricting the bonus to the overdue pool (which is manually placed, not auto-slotted) avoids this: a ranking change there just reorders a suggestion list the user is already choosing from, rather than silently moving something already committed to the calendar.
 - **`done` tasks never reach this function** — they're filtered out of the candidate pool before scheduling entirely (assumed to happen upstream; not enforced inside this file).
 
-## `tieBreaker(tasks)`
+## Tie-breaking
 
-When multiple tasks land on the exact same priority score, orders them by `createdAt` (oldest first) as a deterministic fallback. Sorts in place — acceptable here since it operates on a small, transient tied-subset with no other holder of that reference, not a long-lived shared array.
+`priority()` only scores a single task in isolation — it doesn't order a list. Ordering (and breaking ties when two tasks land on the exact same priority score) happens where the full task list is actually sorted, in `schedule.ts` (see `scheduling.md`): ties fall back to `createdAt` ascending (oldest first), a deterministic first-come-first-served rule. See `priority-issues.md` issue 4 for the reasoning trail.
 
 ## Data stored per task
 
@@ -114,15 +114,7 @@ Only what's needed to recompute priority on demand:
 
 Nothing else is stored — priority is recomputed fresh every time the calendar is viewed, since it's cheap and fully deterministic.
 
-## Explicitly out of scope for this phase
-
-The following belong to the next phase (scheduling/slotting) and are **not** implemented here:
-- Free time / buffer computation
-- Fixed and recurring event modeling
-- The actual slot-fitting algorithm
-- The orchestrating function that ranks a full task list end-to-end (compute priority for every task, group ties, apply `tieBreaker`)
-
-## Notable deferred decisions (see `issues.md` for full reasoning)
+## Notable deferred decisions (see `priority-issues.md` for full reasoning)
 
 - **No grace period for overdue tasks.** The scheduler's design is prevention, not cure (v1 scope) — a task crosses into "overdue" immediately at its due timestamp, with no buffer window. Revisiting this to also act as a "cure" mechanism is a possible future direction, though the overdue pool's SPT-style ranking already partially serves that purpose.
 - **Timezone handling for "due today" boundaries** is a known open edge case, not yet resolved.
