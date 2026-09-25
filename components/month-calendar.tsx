@@ -131,7 +131,7 @@ export function MonthCalendar({ items }: { items: CalendarItem[] }) {
                         <button
                           type="button"
                           className={cn(
-                            "truncate rounded bg-orange-100 px-1 py-0.5 text-left text-[10px] text-orange-900 sm:px-1.5 sm:text-xs",
+                            "truncate rounded bg-primary/15 px-1 py-0.5 text-left text-[10px] text-primary sm:px-1.5 sm:text-xs",
                             item.task.state === "done" && "line-through opacity-60",
                           )}
                         >
@@ -146,7 +146,7 @@ export function MonthCalendar({ items }: { items: CalendarItem[] }) {
                       trigger={
                         <button
                           type="button"
-                          className="truncate rounded bg-blue-100 px-1 py-0.5 text-left text-[10px] text-blue-900 sm:px-1.5 sm:text-xs"
+                          className="truncate rounded bg-accent px-1 py-0.5 text-left text-[10px] text-accent-foreground sm:px-1.5 sm:text-xs"
                         >
                           {item.title}
                         </button>
