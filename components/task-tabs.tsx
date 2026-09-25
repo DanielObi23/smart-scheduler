@@ -31,18 +31,18 @@ export function TaskTabs({
 }: TaskTabsProps) {
   return (
     <Tabs defaultValue="calendar" className="gap-4">
-      <TabsList className="h-auto flex-wrap">
+      <TabsList className="h-auto w-full sm:w-fit">
         <TabsTrigger value="calendar">
-          <CalendarIcon /> Calendar
+          <CalendarIcon /> <span className="hidden sm:inline">Calendar</span>
         </TabsTrigger>
         <TabsTrigger value="timetable">
-          <Building2Icon /> Timetable
+          <Building2Icon /> <span className="hidden sm:inline">Timetable</span>
         </TabsTrigger>
         <TabsTrigger value="board">
-          <LayoutGridIcon /> Board
+          <LayoutGridIcon /> <span className="hidden sm:inline">Board</span>
         </TabsTrigger>
         <TabsTrigger value="overdue">
-          <TriangleAlertIcon /> Overdue
+          <TriangleAlertIcon /> <span className="hidden sm:inline">Overdue</span>
           {overdueTasks.length > 0 && (
             <Badge variant="secondary">{overdueTasks.length}</Badge>
           )}
@@ -62,12 +62,18 @@ export function TaskTabs({
       </TabsContent>
 
       <TabsContent value="timetable" className="flex flex-col gap-4">
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-muted-foreground">
             Your fixed commitments — sleep, work, classes — that the
             scheduler works around when placing tasks.
           </p>
-          <FixedEventForm trigger={<Button size="sm">+ New entry</Button>} />
+          <FixedEventForm
+            trigger={
+              <Button size="sm" className="self-start sm:self-auto">
+                + New entry
+              </Button>
+            }
+          />
         </div>
         <TimetableList events={fixedEvents} />
       </TabsContent>
