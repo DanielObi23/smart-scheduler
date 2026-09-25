@@ -35,9 +35,9 @@ export function OverdueList({
           key={task.id}
           task={task}
           trigger={
-            <Card className="w-full cursor-pointer flex-row items-center justify-between gap-4 p-4 text-left">
-              <p className="font-medium">{task.title}</p>
-              <p className="text-sm text-muted-foreground">
+            <Card className="w-full cursor-pointer gap-1 p-4 text-left sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+              <p className="truncate font-medium">{task.title}</p>
+              <p className="text-sm text-muted-foreground sm:shrink-0">
                 Due {task.dueDateTime.toLocaleString(undefined, {
                   month: "short",
                   day: "numeric",

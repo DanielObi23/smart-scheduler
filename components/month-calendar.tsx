@@ -54,8 +54,8 @@ export function MonthCalendar({ items }: { items: CalendarItem[] }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h1 className="text-lg font-semibold sm:text-xl">
           {monthAnchor.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
         </h1>
         <div className="flex items-center gap-1">
@@ -86,7 +86,8 @@ export function MonthCalendar({ items }: { items: CalendarItem[] }) {
       <div className="grid grid-cols-7 gap-px overflow-hidden rounded-lg border bg-border text-center text-xs font-medium text-muted-foreground">
         {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
           <div key={d} className="bg-muted py-1.5">
-            {d}
+            <span className="sm:hidden">{d[0]}</span>
+            <span className="hidden sm:inline">{d}</span>
           </div>
         ))}
       </div>
@@ -101,7 +102,7 @@ export function MonthCalendar({ items }: { items: CalendarItem[] }) {
             <div
               key={dayKey(day)}
               className={cn(
-                "flex min-h-24 flex-col gap-1 bg-background p-1.5",
+                "flex min-h-16 flex-col gap-1 bg-background p-1 sm:min-h-24 sm:p-1.5",
                 !inCurrentMonth && "bg-muted/40",
               )}
             >
@@ -111,7 +112,7 @@ export function MonthCalendar({ items }: { items: CalendarItem[] }) {
                   <button
                     type="button"
                     className={cn(
-                      "self-start rounded px-1 text-xs",
+                      "self-start rounded px-1 text-[11px] sm:text-xs",
                       !inCurrentMonth && "text-muted-foreground",
                       isToday && "bg-primary text-primary-foreground font-semibold",
                     )}
@@ -120,7 +121,7 @@ export function MonthCalendar({ items }: { items: CalendarItem[] }) {
                   </button>
                 }
               />
-              <div className="flex flex-col gap-1">
+              <div className="flex flex-col gap-0.5 sm:gap-1">
                 {dayItems.map((item) =>
                   item.kind === "task" && item.task ? (
                     <TaskModal
@@ -130,7 +131,7 @@ export function MonthCalendar({ items }: { items: CalendarItem[] }) {
                         <button
                           type="button"
                           className={cn(
-                            "truncate rounded bg-orange-100 px-1.5 py-0.5 text-left text-xs text-orange-900",
+                            "truncate rounded bg-orange-100 px-1 py-0.5 text-left text-[10px] text-orange-900 sm:px-1.5 sm:text-xs",
                             item.task.state === "done" && "line-through opacity-60",
                           )}
                         >
@@ -145,7 +146,7 @@ export function MonthCalendar({ items }: { items: CalendarItem[] }) {
                       trigger={
                         <button
                           type="button"
-                          className="truncate rounded bg-blue-100 px-1.5 py-0.5 text-left text-xs text-blue-900"
+                          className="truncate rounded bg-blue-100 px-1 py-0.5 text-left text-[10px] text-blue-900 sm:px-1.5 sm:text-xs"
                         >
                           {item.title}
                         </button>

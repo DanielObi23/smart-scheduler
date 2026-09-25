@@ -39,16 +39,16 @@ export function TimetableList({ events }: { events: FixedEventRow[] }) {
     <div className="flex flex-col gap-2">
       {events.map((event) => (
         <Card key={event.id} className="flex-row items-center justify-between gap-4 p-4">
-          <div>
-            <p className="font-medium">{event.title}</p>
-            <p className="text-sm text-muted-foreground">
+          <div className="min-w-0">
+            <p className="truncate font-medium">{event.title}</p>
+            <p className="truncate text-sm text-muted-foreground">
               {recurrenceLabel(event)} · {event.startTime}–{event.endTime}
             </p>
           </div>
           <FixedEventForm
             event={event}
             trigger={
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" className="shrink-0">
                 Edit
               </Button>
             }
