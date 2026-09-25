@@ -11,7 +11,7 @@ export default function SignInPage() {
   const [state, formAction, isPending] = useActionState(signInWithEmail, null);
 
   return (
-    <div className="flex flex-1 items-center justify-center py-16">
+    <div className="flex flex-1 items-center justify-center px-4 py-16">
       <form action={formAction} className="flex w-full max-w-sm flex-col gap-4">
         <h1 className="text-xl font-semibold">Sign in</h1>
 
