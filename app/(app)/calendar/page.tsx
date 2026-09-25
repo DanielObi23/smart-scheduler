@@ -17,14 +17,9 @@ export const dynamic = "force-dynamic";
 export default async function CalendarPage() {
   const userId = await requireUserId();
 
-  // Single captured moment for this request -- `now` and `dateTimeNow` must
-  // represent the exact same instant (not two separate `new Date()` calls,
-  // which could disagree by a few ms), but schedule()'s internals mutate
-  // whatever Date object `now` is, so `dateTimeNow` still needs its own
-  // cloned reference rather than sharing `now`'s object.
-  const capturedNow = new Date();
-  const now = capturedNow;
-  const dateTimeNow = new Date(capturedNow);
+  // Fresh instance for this request -- schedule() now takes a single `now`
+  // (mutates it internally), and nothing here reads `now` again afterward.
+  const now = new Date();
 
   const [taskRows, fixedEventRows, settings] = await Promise.all([
     getSchedulableTasksForUser(userId, now),
@@ -48,7 +43,6 @@ export default async function CalendarPage() {
           fixedTask: expandedFixedTasks,
           dailyCapacity: settings.dailyCapacityHours,
           capacityOverflowPercent: settings.capacityOverflowPercent,
-          dateTimeNow,
           now,
         })
       : null;

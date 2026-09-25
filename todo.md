@@ -1,0 +1,4 @@
+- How to set sleep time properly
+- recurring events, should be able to set which days, e.g mondays, wednesday and fridays or mondays - fridays etc
+- clicking a day on calendar should allow for adding a task for that day
+- the tasks scheduled should show time ranges for the task

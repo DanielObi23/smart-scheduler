@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { SignOutButton } from "@/components/sign-out-button";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const links = [
   { href: "/calendar", label: "Calendar" },
@@ -21,7 +22,10 @@ export function NavBar() {
             </Button>
           ))}
         </nav>
-        <SignOutButton />
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <SignOutButton />
+        </div>
       </div>
     </header>
   );

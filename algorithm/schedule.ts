@@ -5,6 +5,18 @@ type TimeRange = {
   end: Date;
 };
 
+const getStartDay = (now: Date): Date => {
+  const date = new Date(now);
+  date.setHours(0, 0, 0, 0);
+  return date;
+};
+
+const getEndDay = (now: Date): Date => {
+  const date = new Date(now);
+  date.setHours(23, 59, 59, 999);
+  return date;
+};
+
 const uniqueTimeRange = (fixedTimeRange: TimeRange[]) => {
   // Interval merging (classic overlap/merge-intervals problem).
   // See scheduling-issues.md issue 1 for the reasoning trail.
@@ -13,16 +25,14 @@ const uniqueTimeRange = (fixedTimeRange: TimeRange[]) => {
   const sortedFixedTime = [...fixedTimeRange].sort(
     (a, b) => a.start.getTime() - b.start.getTime(),
   );
+  let highestEndSoFar = 0;
   const uniqueFixedTimeRanges = sortedFixedTime.map(
     (timeRange: TimeRange, index) => {
-      const prevHigestEndTime = sortedFixedTime
-        .slice(0, index)
-        .reduce((currentValue, sortedTimeRange) => {
-          if (sortedTimeRange.end.getTime() > currentValue) {
-            return sortedTimeRange.end.getTime();
-          }
-          return currentValue;
-        }, 0);
+      const prevHigestEndTime = highestEndSoFar;
+
+      if (timeRange.end.getTime() > highestEndSoFar) {
+        highestEndSoFar = timeRange.end.getTime();
+      }
 
       if (index === 0 || timeRange.start.getTime() > prevHigestEndTime) {
         // if start time is greater than previous highest end time in the list
@@ -57,8 +67,8 @@ const freeTimeRanges = (usedTimeRanges: TimeRange[], now: Date) => {
 
   // Calculate free time ranges in a day
 
-  const startDay = now.setHours(0, 0, 0, 0);
-  const endDay = now.setHours(23, 59, 59, 999);
+  const startDay = getStartDay(now);
+  const endDay = getEndDay(now);
   let freeTimeRanges = [];
 
   if (usedTimeRanges.length === 0) {
@@ -128,8 +138,9 @@ const allowedFreeTime = ({
     const overflow = (capacityOverflowPercent / 100) * dailyCapacity;
     // let it get a little more as it's a free day.
     const fullCapacity = Math.ceil(dailyCapacity + overflow);
-    const start = new Date(now.setHours(0, 0, 0, 0));
-    const end = new Date(now.setHours(fullCapacity, 0, 0, 0));
+    const start = getStartDay(now);
+    const end = new Date(now);
+    end.setHours(fullCapacity, 0, 0, 0);
     return [
       {
         start,
@@ -221,7 +232,6 @@ type Schedule = {
   fixedTask: FixedTask[];
   dailyCapacity: number; // in hours
   capacityOverflowPercent: number; // in percent, 0-100
-  dateTimeNow: Date;
   now: Date;
 };
 
@@ -247,7 +257,6 @@ export const schedule = ({
   tasks, // tasks to be scheduled
   fixedTask, // already scheduled tasks
   dailyCapacity,
-  dateTimeNow,
   capacityOverflowPercent,
   now,
 }: Schedule) => {
@@ -258,7 +267,7 @@ export const schedule = ({
   const withPriority = tasks.map((task) => ({
     // Not computed within .sort() to avoid re-computing, resulting in better efficiency
     task,
-    priority: priority({ task, now: dateTimeNow, dailyCapacity }),
+    priority: priority({ task, now, dailyCapacity }),
   }));
   const prioritySortedTasks = withPriority.sort((a, b) => {
     const priorityA = a.priority;
@@ -304,7 +313,8 @@ export const schedule = ({
     furthestDueDate = dueDateSortedTasks.at(-1)!.dueDateTime;
   }
 
-  const todayStart = now.setHours(0, 0, 0, 0);
+  now = getStartDay(now);
+  const todayStart = now.getTime();
   const millisecondsPerDay = 86_400_000;
   // how many days from now is furthest due date
   let maxDayCount = Math.ceil(
