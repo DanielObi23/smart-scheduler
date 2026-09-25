@@ -36,8 +36,8 @@ const fixedEventInputSchema = z
 export type FixedEventInput = z.infer<typeof fixedEventInputSchema>;
 
 function revalidateFixedEventPages() {
+  // Calendar and Timetable are both tabs on the same route now.
   revalidatePath("/calendar");
-  revalidatePath("/timetable");
 }
 
 export async function createFixedEvent(input: FixedEventInput) {

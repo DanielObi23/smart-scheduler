@@ -3,10 +3,15 @@ import { schedule } from "@/algorithm/schedule";
 import { dbTaskToTask } from "@/lib/map-task";
 import { dbFixedEventToDefinition } from "@/lib/map-fixed-event";
 import { expandFixedEvents } from "@/lib/expand-fixed-events";
-import { getSchedulableTasksForUser } from "@/db/queries/tasks";
+import {
+  getSchedulableTasksForUser,
+  getAllTasksForUser,
+  getOverdueTasksForUser,
+} from "@/db/queries/tasks";
 import { getFixedEventsForUser } from "@/db/queries/fixedEvents";
 import { getUserSettings } from "@/db/queries/settings";
-import { MonthCalendar, type CalendarItem } from "@/components/month-calendar";
+import { TaskTabs } from "@/components/task-tabs";
+import type { CalendarItem } from "@/components/month-calendar";
 import type { TaskRow } from "@/db/schema";
 
 const HORIZON_DAYS = 90;
@@ -14,20 +19,24 @@ const HORIZON_DAYS = 90;
 // Server components using Neon Auth's session methods must render dynamically.
 export const dynamic = "force-dynamic";
 
-export default async function CalendarPage() {
+export default async function AppPage() {
   const userId = await requireUserId();
 
-  // Fresh instance for this request -- schedule() now takes a single `now`
-  // (mutates it internally), and nothing here reads `now` again afterward.
+  // Fresh instance for this request -- schedule() mutates its own local
+  // binding internally now, never the object the caller passed in, so this
+  // same `now` is safe to reuse afterward for the Overdue tab.
   const now = new Date();
 
-  const [taskRows, fixedEventRows, settings] = await Promise.all([
-    getSchedulableTasksForUser(userId, now),
-    getFixedEventsForUser(userId),
-    getUserSettings(userId),
-  ]);
+  const [schedulableTaskRows, allTaskRows, overdueTaskRows, fixedEventRows, settings] =
+    await Promise.all([
+      getSchedulableTasksForUser(userId, now),
+      getAllTasksForUser(userId),
+      getOverdueTasksForUser(userId, now),
+      getFixedEventsForUser(userId),
+      getUserSettings(userId),
+    ]);
 
-  const tasksById = new Map<string, TaskRow>(taskRows.map((row) => [row.id, row]));
+  const tasksById = new Map<string, TaskRow>(schedulableTaskRows.map((row) => [row.id, row]));
   const fixedEventsById = new Map(fixedEventRows.map((row) => [row.id, row]));
 
   const expandedFixedTasks = expandFixedEvents({
@@ -37,9 +46,9 @@ export default async function CalendarPage() {
   });
 
   const result =
-    taskRows.length > 0
+    schedulableTaskRows.length > 0
       ? schedule({
-          tasks: taskRows.map(dbTaskToTask),
+          tasks: schedulableTaskRows.map(dbTaskToTask),
           fixedTask: expandedFixedTasks,
           dailyCapacity: settings.dailyCapacityHours,
           capacityOverflowPercent: settings.capacityOverflowPercent,
@@ -47,12 +56,12 @@ export default async function CalendarPage() {
         })
       : null;
 
-  const items: CalendarItem[] = [];
+  const calendarItems: CalendarItem[] = [];
 
   for (const record of result?.scheduledTasks ?? []) {
     const task = tasksById.get(record.taskId);
     if (!task) continue;
-    items.push({
+    calendarItems.push({
       key: `task:${record.taskId}:${record.start.getTime()}`,
       kind: "task",
       title: task.title,
@@ -66,7 +75,7 @@ export default async function CalendarPage() {
     const originalId = expanded.id.split(":")[0];
     const fixedEvent = fixedEventsById.get(originalId);
     if (!fixedEvent) continue;
-    items.push({
+    calendarItems.push({
       key: `fixed:${expanded.id}`,
       kind: "fixed",
       title: fixedEvent.title,
@@ -76,5 +85,14 @@ export default async function CalendarPage() {
     });
   }
 
-  return <MonthCalendar items={items} />;
+  return (
+    <TaskTabs
+      calendarItems={calendarItems}
+      allTasks={allTaskRows}
+      fixedEvents={fixedEventRows}
+      overdueTasks={overdueTaskRows}
+      dailyCapacity={settings.dailyCapacityHours}
+      now={now}
+    />
+  );
 }

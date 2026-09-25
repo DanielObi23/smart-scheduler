@@ -19,9 +19,8 @@ const taskInputSchema = z.object({
 export type TaskInput = z.infer<typeof taskInputSchema>;
 
 function revalidateTaskPages() {
+  // Calendar, Board, and Overdue are all tabs on the same route now.
   revalidatePath("/calendar");
-  revalidatePath("/board");
-  revalidatePath("/overdue");
 }
 
 export async function createTask(input: TaskInput) {
