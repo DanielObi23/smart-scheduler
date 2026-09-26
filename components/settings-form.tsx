@@ -14,12 +14,19 @@ export function SettingsForm({ settings }: { settings: UserSettingsRow }) {
   const [capacityOverflowPercent, setCapacityOverflowPercent] = useState(
     settings.capacityOverflowPercent,
   );
+  const [sleepStart, setSleepStart] = useState(settings.sleepStart);
+  const [sleepEnd, setSleepEnd] = useState(settings.sleepEnd);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     startTransition(async () => {
       try {
-        await updateSettings({ dailyCapacityHours, capacityOverflowPercent });
+        await updateSettings({
+          dailyCapacityHours,
+          capacityOverflowPercent,
+          sleepStart,
+          sleepEnd,
+        });
         toast.success("Settings saved");
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Something went wrong");
@@ -57,6 +64,40 @@ export function SettingsForm({ settings }: { settings: UserSettingsRow }) {
         <p className="text-xs text-muted-foreground">
           How far past your daily capacity the scheduler is allowed to go on a
           busy day. 0 means strict.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label>Sleep</Label>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="sleepStart" className="text-xs font-normal text-muted-foreground">
+              Start
+            </Label>
+            <Input
+              id="sleepStart"
+              type="time"
+              value={sleepStart}
+              onChange={(e) => setSleepStart(e.target.value)}
+              required
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="sleepEnd" className="text-xs font-normal text-muted-foreground">
+              End
+            </Label>
+            <Input
+              id="sleepEnd"
+              type="time"
+              value={sleepEnd}
+              onChange={(e) => setSleepEnd(e.target.value)}
+              required
+            />
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Applied every day as fixed time, the same way a Timetable entry
+          would be — no need to add it there separately.
         </p>
       </div>
 

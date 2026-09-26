@@ -52,11 +52,14 @@ export const fixedEvents = pgTable("fixed_events", {
 });
 
 export const userSettings = pgTable("user_settings", {
-  userId: text("user_id").primaryKey(), // Clerk user id
+  userId: text("user_id").primaryKey(), // Neon Auth user id
   dailyCapacityHours: integer("daily_capacity_hours").notNull().default(8),
   capacityOverflowPercent: integer("capacity_overflow_percent")
     .notNull()
     .default(10),
+  // "HH:mm", applied as a daily fixed block the same way a Timetable entry is.
+  sleepStart: text("sleep_start").notNull().default("23:00"),
+  sleepEnd: text("sleep_end").notNull().default("07:00"),
 });
 
 export type TaskRow = typeof tasks.$inferSelect;

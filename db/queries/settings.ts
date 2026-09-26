@@ -5,6 +5,8 @@ import { userSettings, type UserSettingsRow } from "@/db/schema";
 const DEFAULT_SETTINGS: Omit<UserSettingsRow, "userId"> = {
   dailyCapacityHours: 8,
   capacityOverflowPercent: 10,
+  sleepStart: "23:00",
+  sleepEnd: "07:00",
 };
 
 /** Falls back to sane defaults if the user hasn't saved settings yet. */

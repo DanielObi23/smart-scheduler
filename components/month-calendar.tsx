@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -10,7 +11,7 @@ import type { TaskRow, FixedEventRow } from "@/db/schema";
 
 export type CalendarItem = {
   key: string;
-  kind: "task" | "fixed";
+  kind: "task" | "fixed" | "sleep";
   title: string;
   start: Date;
   end: Date;
@@ -152,6 +153,14 @@ export function MonthCalendar({ items }: { items: CalendarItem[] }) {
                         </button>
                       }
                     />
+                  ) : item.kind === "sleep" ? (
+                    <Link
+                      key={item.key}
+                      href="/settings"
+                      className="truncate rounded border-l-4 border-l-chart-2 bg-card px-1 py-0.5 text-left text-[10px] text-card-foreground sm:px-1.5 sm:text-xs"
+                    >
+                      {item.title}
+                    </Link>
                   ) : null,
                 )}
               </div>

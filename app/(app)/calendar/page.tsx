@@ -2,7 +2,7 @@ import { requireUserId } from "@/lib/auth/require-user-id";
 import { schedule } from "@/algorithm/schedule";
 import { dbTaskToTask } from "@/lib/map-task";
 import { dbFixedEventToDefinition } from "@/lib/map-fixed-event";
-import { expandFixedEvents } from "@/lib/expand-fixed-events";
+import { expandFixedEvents, type FixedEventDefinition } from "@/lib/expand-fixed-events";
 import {
   getSchedulableTasksForUser,
   getAllTasksForUser,
@@ -39,8 +39,16 @@ export default async function AppPage() {
   const tasksById = new Map<string, TaskRow>(schedulableTaskRows.map((row) => [row.id, row]));
   const fixedEventsById = new Map(fixedEventRows.map((row) => [row.id, row]));
 
+  const sleepDefinition: FixedEventDefinition = {
+    id: "sleep",
+    title: "Sleep",
+    recurrence: { type: "daily" },
+    startTime: settings.sleepStart,
+    endTime: settings.sleepEnd,
+  };
+
   const expandedFixedTasks = expandFixedEvents({
-    events: fixedEventRows.map(dbFixedEventToDefinition),
+    events: [sleepDefinition, ...fixedEventRows.map(dbFixedEventToDefinition)],
     rangeStart: now,
     daysAhead: HORIZON_DAYS,
   });
@@ -73,6 +81,18 @@ export default async function AppPage() {
 
   for (const expanded of expandedFixedTasks) {
     const originalId = expanded.id.split(":")[0];
+
+    if (originalId === "sleep") {
+      calendarItems.push({
+        key: `sleep:${expanded.id}`,
+        kind: "sleep",
+        title: "Sleep",
+        start: expanded.start,
+        end: expanded.end,
+      });
+      continue;
+    }
+
     const fixedEvent = fixedEventsById.get(originalId);
     if (!fixedEvent) continue;
     calendarItems.push({
