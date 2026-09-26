@@ -120,11 +120,19 @@ export function expandFixedEvents({
           start,
           end: endOfDay(day),
         });
-        expanded.push({
-          id: `${event.id}:${dayIndex}:b`,
-          start: startOfDay(nextDay),
-          end: atTimeOfDay(nextDay, parseTimeOfDay(event.endTime)),
-        });
+
+        const nextDayStart = startOfDay(nextDay);
+        const nextDayEnd = atTimeOfDay(nextDay, parseTimeOfDay(event.endTime));
+        // An end time of exactly "00:00" makes this piece zero-length (the
+        // whole occurrence is really just the ":a" tail above) -- emitting
+        // it anyway shows up as a phantom entry on the following day.
+        if (nextDayEnd.getTime() > nextDayStart.getTime()) {
+          expanded.push({
+            id: `${event.id}:${dayIndex}:b`,
+            start: nextDayStart,
+            end: nextDayEnd,
+          });
+        }
       } else {
         expanded.push({
           id: `${event.id}:${dayIndex}`,
