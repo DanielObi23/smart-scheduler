@@ -82,16 +82,10 @@ export default async function AppPage() {
   for (const expanded of expandedFixedTasks) {
     const originalId = expanded.id.split(":")[0];
 
-    if (originalId === "sleep") {
-      calendarItems.push({
-        key: `sleep:${expanded.id}`,
-        kind: "sleep",
-        title: "Sleep",
-        start: expanded.start,
-        end: expanded.end,
-      });
-      continue;
-    }
+    // Sleep still blocks time for schedule() (it's in expandedFixedTasks
+    // above), it's just not shown as a calendar item -- this view is for
+    // tasks, not for displaying every fixed commitment back to the user.
+    if (originalId === "sleep") continue;
 
     const fixedEvent = fixedEventsById.get(originalId);
     if (!fixedEvent) continue;
