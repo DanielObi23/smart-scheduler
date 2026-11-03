@@ -1,10 +1,12 @@
 # Optimum Personal Schedule Recommender
 
+**Live demo: [smart-scheduler-alpha.vercel.app](https://smart-scheduler-alpha.vercel.app/sign-in)**
+
 A personal task scheduler that doesn't just list your to-dos — it actually decides *when* you'll do them. You give it tasks (with an importance rating, an estimate, and a due date) and your fixed commitments (sleep, work, classes), and a deterministic, math-based algorithm — not an LLM, not machine learning — slots each task into your free time, highest priority first, splitting a task across multiple days if it has to.
 
 ## What this is
 
-- **The algorithm** (`algorithm/priority.ts`, `algorithm/schedule.ts`) is the core of this project — kept in its own folder, separate from everything else, since it's the part I built and debugged myself; the app around it (UI, database, auth) was built with Claude Code. It scores every task on a combination of importance and a pace-driven urgency curve, then places tasks into available time using classic scheduling/CS techniques — interval merging, gap-finding, bin packing (Best-Fit), and a Shortest-Processing-Time-style ranking for anything that slips past its due date. It's pure and deterministic: the same inputs always produce the same output, `now` is always passed in rather than read from the system clock, and it's been verified with both hand-picked edge cases and a 2000-run randomized fuzz test.
+- **The algorithm** (`algorithm/priority.ts`, `algorithm/schedule.ts`) is the core of this project — kept in its own folder, separate from everything else, since it's the part I built and debugged myself; the app around it (UI, database, auth) was built with Claude Code. It scores every task on a combination of importance and a pace-driven urgency curve, then places tasks into available time using classic scheduling/CS techniques — interval merging, gap-finding, bin packing (Best-Fit), and a Shortest-Processing-Time-style ranking for anything that slips past its due date. It's pure and deterministic: the same inputs always produce the same output, `now` is always passed in rather than read from the system clock, and it's been verified with both hand-picked edge cases and a 2000-run randomized fuzz test — see **`tests/`** (written by Claude Code, see `tests/README.md`) to actually run that verification yourself with `pnpm test`.
 - **The app around it** is a Next.js (App Router) UI with Neon Auth for authentication and a Neon Postgres database (via Drizzle), giving you a calendar view, a Kanban board, a timetable for recurring commitments, an overdue list, and settings for how many hours a day you actually have.
 
 ## Where to find things
@@ -45,6 +47,14 @@ Then push the schema to your database and start the dev server:
 pnpm drizzle-kit push
 pnpm dev
 ```
+
+## Testing
+
+```bash
+pnpm test
+```
+
+Runs the algorithm's test suite (`tests/`) — hand-picked edge cases, a 2000-run randomized fuzz test, and targeted regressions for specific bugs that were found and fixed during development. No database or auth setup needed; these test `algorithm/priority.ts` and `algorithm/schedule.ts` directly as pure functions.
 
 ## Deploying to Vercel
 
