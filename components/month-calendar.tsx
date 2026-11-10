@@ -1,8 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
+import { ChevronLeftIcon, ChevronRightIcon, PlusIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { TaskModal } from "@/components/task-modal";
 import { FixedEventForm } from "@/components/fixed-event-form";
@@ -36,6 +42,112 @@ function buildMonthGrid(monthAnchor: Date): Date[] {
     day.setDate(gridStart.getDate() + i);
     return day;
   });
+}
+
+function formatTime(date: Date): string {
+  return date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
+function DayCell({
+  day,
+  inCurrentMonth,
+  isToday,
+  dayItems,
+}: {
+  day: Date;
+  inCurrentMonth: boolean;
+  isToday: boolean;
+  dayItems: CalendarItem[];
+}) {
+  const [quickAdd, setQuickAdd] = useState<"task" | "fixed" | null>(null);
+
+  return (
+    <div
+      className={cn(
+        "relative flex min-h-16 flex-col gap-1 bg-background p-1 sm:min-h-24 sm:p-1.5",
+        !inCurrentMonth && "bg-muted/40",
+      )}
+    >
+      {/* Fills the whole cell so clicking empty space opens the add-task/add-fixed-event
+          menu too -- it sits behind the day number and item chips (z-0 vs z-10), which
+          are hit first by the pointer wherever they overlap it. */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            aria-label={`Add something on ${day.toLocaleDateString()}`}
+            className="absolute inset-0 z-0"
+          />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent>
+          <DropdownMenuItem onSelect={() => setQuickAdd("task")}>
+            <PlusIcon /> New task
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setQuickAdd("fixed")}>
+            <PlusIcon /> New fixed event
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <TaskModal
+        defaultDueDate={day}
+        open={quickAdd === "task"}
+        onOpenChange={(next) => setQuickAdd(next ? "task" : null)}
+      />
+      <FixedEventForm
+        defaultDate={day}
+        open={quickAdd === "fixed"}
+        onOpenChange={(next) => setQuickAdd(next ? "fixed" : null)}
+      />
+
+      <span
+        className={cn(
+          "relative z-10 self-start rounded px-1 text-[11px] sm:text-xs",
+          !inCurrentMonth && "text-muted-foreground",
+          isToday && "bg-primary text-primary-foreground font-semibold",
+        )}
+      >
+        {day.getDate()}
+      </span>
+      <div className="relative z-10 flex flex-col gap-0.5 sm:gap-1">
+        {dayItems.map((item) =>
+          item.kind === "task" && item.task ? (
+            <TaskModal
+              key={item.key}
+              task={item.task}
+              trigger={
+                <button
+                  type="button"
+                  className={cn(
+                    "flex flex-col rounded border-l-4 border-l-chart-4 bg-card px-1 py-0.5 text-left text-card-foreground sm:px-1.5",
+                    item.task.state === "done" && "line-through opacity-60",
+                  )}
+                >
+                  <span className="truncate text-[10px] sm:text-xs">{item.title}</span>
+                  <span className="truncate text-[9px] text-muted-foreground sm:text-[10px]">
+                    {formatTime(item.start)}–{formatTime(item.end)}
+                  </span>
+                </button>
+              }
+            />
+          ) : item.fixedEvent ? (
+            <FixedEventForm
+              key={item.key}
+              event={item.fixedEvent}
+              trigger={
+                <button
+                  type="button"
+                  className="truncate rounded border-l-4 border-l-chart-2 bg-card px-1 py-0.5 text-left text-[10px] text-card-foreground sm:px-1.5 sm:text-xs"
+                >
+                  {item.title}
+                </button>
+              }
+            />
+          ) : null,
+        )}
+      </div>
+    </div>
+  );
 }
 
 export function MonthCalendar({ items }: { items: CalendarItem[] }) {
@@ -99,76 +211,13 @@ export function MonthCalendar({ items }: { items: CalendarItem[] }) {
           const dayItems = itemsByDay.get(dayKey(day)) ?? [];
 
           return (
-            <div
+            <DayCell
               key={dayKey(day)}
-              className={cn(
-                "relative flex min-h-16 flex-col gap-1 bg-background p-1 sm:min-h-24 sm:p-1.5",
-                !inCurrentMonth && "bg-muted/40",
-              )}
-            >
-              {/* Fills the whole cell so clicking empty space also opens "add fixed
-                  event" -- it sits behind the day number and item chips (z-0 vs
-                  z-10), which are hit first by the pointer wherever they overlap it. */}
-              <FixedEventForm
-                defaultDate={day}
-                trigger={
-                  <button
-                    type="button"
-                    aria-label={`Add a fixed event on ${day.toLocaleDateString()}`}
-                    className="absolute inset-0 z-0"
-                  />
-                }
-              />
-              <FixedEventForm
-                defaultDate={day}
-                trigger={
-                  <button
-                    type="button"
-                    className={cn(
-                      "relative z-10 self-start rounded px-1 text-[11px] sm:text-xs",
-                      !inCurrentMonth && "text-muted-foreground",
-                      isToday && "bg-primary text-primary-foreground font-semibold",
-                    )}
-                  >
-                    {day.getDate()}
-                  </button>
-                }
-              />
-              <div className="relative z-10 flex flex-col gap-0.5 sm:gap-1">
-                {dayItems.map((item) =>
-                  item.kind === "task" && item.task ? (
-                    <TaskModal
-                      key={item.key}
-                      task={item.task}
-                      trigger={
-                        <button
-                          type="button"
-                          className={cn(
-                            "truncate rounded border-l-4 border-l-chart-4 bg-card px-1 py-0.5 text-left text-[10px] text-card-foreground sm:px-1.5 sm:text-xs",
-                            item.task.state === "done" && "line-through opacity-60",
-                          )}
-                        >
-                          {item.title}
-                        </button>
-                      }
-                    />
-                  ) : item.fixedEvent ? (
-                    <FixedEventForm
-                      key={item.key}
-                      event={item.fixedEvent}
-                      trigger={
-                        <button
-                          type="button"
-                          className="truncate rounded border-l-4 border-l-chart-2 bg-card px-1 py-0.5 text-left text-[10px] text-card-foreground sm:px-1.5 sm:text-xs"
-                        >
-                          {item.title}
-                        </button>
-                      }
-                    />
-                  ) : null,
-                )}
-              </div>
-            </div>
+              day={day}
+              inCurrentMonth={inCurrentMonth}
+              isToday={isToday}
+              dayItems={dayItems}
+            />
           );
         })}
       </div>

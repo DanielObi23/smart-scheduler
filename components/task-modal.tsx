@@ -57,13 +57,24 @@ function formStateFromTask(task: TaskRow | undefined, defaultDueDate: Date | und
 }
 
 type TaskModalProps = {
-  trigger: React.ReactNode;
+  /** Omit when driving `open`/`onOpenChange` externally instead (no visible trigger). */
+  trigger?: React.ReactNode;
   task?: TaskRow;
   defaultDueDate?: Date;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 };
 
-export function TaskModal({ trigger, task, defaultDueDate }: TaskModalProps) {
-  const [open, setOpen] = useState(false);
+export function TaskModal({
+  trigger,
+  task,
+  defaultDueDate,
+  open: openProp,
+  onOpenChange: onOpenChangeProp,
+}: TaskModalProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = openProp ?? internalOpen;
+  const setOpen = onOpenChangeProp ?? setInternalOpen;
   const [isPending, startTransition] = useTransition();
   const [form, setForm] = useState(() => formStateFromTask(task, defaultDueDate));
 
@@ -120,7 +131,7 @@ export function TaskModal({ trigger, task, defaultDueDate }: TaskModalProps) {
         if (next) resetForm();
       }}
     >
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{task ? "Edit task" : "New task"}</DialogTitle>

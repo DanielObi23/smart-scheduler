@@ -58,13 +58,24 @@ function formStateFromEvent(
 }
 
 type FixedEventFormProps = {
-  trigger: React.ReactNode;
+  /** Omit when driving `open`/`onOpenChange` externally instead (no visible trigger). */
+  trigger?: React.ReactNode;
   event?: FixedEventRow;
   defaultDate?: Date;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 };
 
-export function FixedEventForm({ trigger, event, defaultDate }: FixedEventFormProps) {
-  const [open, setOpen] = useState(false);
+export function FixedEventForm({
+  trigger,
+  event,
+  defaultDate,
+  open: openProp,
+  onOpenChange: onOpenChangeProp,
+}: FixedEventFormProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = openProp ?? internalOpen;
+  const setOpen = onOpenChangeProp ?? setInternalOpen;
   const [isPending, startTransition] = useTransition();
   const [form, setForm] = useState(() => formStateFromEvent(event, defaultDate));
 
@@ -132,7 +143,7 @@ export function FixedEventForm({ trigger, event, defaultDate }: FixedEventFormPr
         if (next) resetForm();
       }}
     >
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{event ? "Edit timetable entry" : "New timetable entry"}</DialogTitle>
