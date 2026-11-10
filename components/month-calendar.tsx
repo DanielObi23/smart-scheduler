@@ -102,17 +102,30 @@ export function MonthCalendar({ items }: { items: CalendarItem[] }) {
             <div
               key={dayKey(day)}
               className={cn(
-                "flex min-h-16 flex-col gap-1 bg-background p-1 sm:min-h-24 sm:p-1.5",
+                "relative flex min-h-16 flex-col gap-1 bg-background p-1 sm:min-h-24 sm:p-1.5",
                 !inCurrentMonth && "bg-muted/40",
               )}
             >
+              {/* Fills the whole cell so clicking empty space also opens "add fixed
+                  event" -- it sits behind the day number and item chips (z-0 vs
+                  z-10), which are hit first by the pointer wherever they overlap it. */}
+              <FixedEventForm
+                defaultDate={day}
+                trigger={
+                  <button
+                    type="button"
+                    aria-label={`Add a fixed event on ${day.toLocaleDateString()}`}
+                    className="absolute inset-0 z-0"
+                  />
+                }
+              />
               <FixedEventForm
                 defaultDate={day}
                 trigger={
                   <button
                     type="button"
                     className={cn(
-                      "self-start rounded px-1 text-[11px] sm:text-xs",
+                      "relative z-10 self-start rounded px-1 text-[11px] sm:text-xs",
                       !inCurrentMonth && "text-muted-foreground",
                       isToday && "bg-primary text-primary-foreground font-semibold",
                     )}
@@ -121,7 +134,7 @@ export function MonthCalendar({ items }: { items: CalendarItem[] }) {
                   </button>
                 }
               />
-              <div className="flex flex-col gap-0.5 sm:gap-1">
+              <div className="relative z-10 flex flex-col gap-0.5 sm:gap-1">
                 {dayItems.map((item) =>
                   item.kind === "task" && item.task ? (
                     <TaskModal
