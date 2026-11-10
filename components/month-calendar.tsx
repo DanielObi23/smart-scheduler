@@ -1,14 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronLeftIcon, ChevronRightIcon, PlusIcon } from "lucide-react";
+import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { TaskModal } from "@/components/task-modal";
 import { FixedEventForm } from "@/components/fixed-event-form";
@@ -59,8 +53,6 @@ function DayCell({
   isToday: boolean;
   dayItems: CalendarItem[];
 }) {
-  const [quickAdd, setQuickAdd] = useState<"task" | "fixed" | null>(null);
-
   return (
     <div
       className={cn(
@@ -68,36 +60,20 @@ function DayCell({
         !inCurrentMonth && "bg-muted/40",
       )}
     >
-      {/* Fills the whole cell so clicking empty space opens the add-task/add-fixed-event
-          menu too -- it sits behind the day number and item chips (z-0 vs z-10), which
-          are hit first by the pointer wherever they overlap it. */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            aria-label={`Add something on ${day.toLocaleDateString()}`}
-            className="absolute inset-0 z-0"
-          />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent>
-          <DropdownMenuItem onSelect={() => setQuickAdd("task")}>
-            <PlusIcon /> New task
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => setQuickAdd("fixed")}>
-            <PlusIcon /> New fixed event
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      <TaskModal
-        defaultDueDate={day}
-        open={quickAdd === "task"}
-        onOpenChange={(next) => setQuickAdd(next ? "task" : null)}
-      />
+      {/* Fills the whole cell so clicking empty space also opens "add fixed
+          event" (already pre-filled for this day) -- it sits behind the day
+          number and item chips (z-0 vs z-10), which are hit first by the
+          pointer wherever they overlap it. Tasks are added from the Board
+          tab only, not from the calendar. */}
       <FixedEventForm
         defaultDate={day}
-        open={quickAdd === "fixed"}
-        onOpenChange={(next) => setQuickAdd(next ? "fixed" : null)}
+        trigger={
+          <button
+            type="button"
+            aria-label={`Add a fixed event on ${day.toLocaleDateString()}`}
+            className="absolute inset-0 z-0"
+          />
+        }
       />
 
       <span
